@@ -4,5 +4,12 @@
   "compatibility_date": "2024-05-08",
   "observability": {
     "enabled": true
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "supreme_db",
+      "database_id": "148f24eb-71c8-4751-9f16-6f5db0153af9"
+    }
+  ]
 }
