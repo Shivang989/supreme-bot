@@ -180,6 +180,97 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+    // ╭━━━━━━━━━━━━━━━✪ [REVIVE FEATURE]
+    if (text === "/revive" || text === "/heal") {
+      const user = await DB_MANAGER.getUser(env.DB, userId);
+      if (!user) return;
+
+      if (user.is_alive === 1) {
+        await sendMessage(`${EMOJIS.error} Tu pehle se zinda hai bhai. Jakar aish kar!`);
+        return;
+      }
+
+      const reviveCost = 500;
+      let newBalance = user.balance;
+      let msg = "";
+
+      // Agar paise hain toh Hospital ka bill katega, warna garib ko free ilaaj
+      if (user.balance >= reviveCost) {
+        newBalance -= reviveCost;
+        msg = `🏥 <b>HOSPITAL BILL PAID</b>\nDoctor ne ₹${reviveCost} liye aur tumhari jaan bacha li.`;
+      } else {
+        msg = `🏥 <b>CHARITY WARD</b>\nTumhare paas paise nahi the, par Underworld ke doctors ne tumhe muft mein zinda kar diya.`;
+      }
+
+      await DB_MANAGER.setAliveStatus(env.DB, userId, 1);
+      await DB_MANAGER.updateBalance(env.DB, userId, newBalance);
+
+      await sendMessage(`${UI.BORDER_TOP}\n│ 🟢 <b>R E S U R R E C T I O N</b>\n${UI.BORDER_BOT}\n\n${msg}\n\nWelcome back to the land of the living, ${firstName}!`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [ROB FEATURE]
+    if (text.startsWith("/rob")) {
+      if (!update.message.reply_to_message) {
+        await sendMessage(`${EMOJIS.error} Kisko lootna hai? Reply to their message.`);
+        return;
+      }
+
+      const targetId = update.message.reply_to_message.from.id;
+      const targetName = update.message.reply_to_message.from.first_name || "Target";
+
+      if (userId === targetId) return;
+      if (update.message.reply_to_message.from.is_bot) {
+         await sendMessage(`${EMOJIS.error} Bot ki jeb khaali hoti hai.`);
+         return;
+      }
+
+      const robber = await DB_MANAGER.getUser(env.DB, userId);
+      if (!robber || robber.is_alive === 0) {
+        await sendMessage(`${EMOJIS.dead} Bhoot chori nahi kar sakte. Pehle /revive use kar.`);
+        return;
+      }
+
+      await DB_MANAGER.ensureUserExists(env.DB, targetId);
+      const target = await DB_MANAGER.getUser(env.DB, targetId);
+      
+      if (!target || target.is_alive === 0) {
+        await sendMessage(`${EMOJIS.error} Murdo ke paas paise nahi hote bhai.`);
+        return;
+      }
+
+      if (target.balance < 100) {
+        await sendMessage(`${EMOJIS.error} <b>${targetName}</b> ke paas phooti kaudi nahi hai. Garib ko kya lootega?`);
+        return;
+      }
+
+      // RNG for Robbery (45% Success Chance)
+      const roll = Math.floor(Math.random() * 100) + 1;
+      
+      if (roll <= 45) { // Success
+        // Steal 10% to 30% of target's balance
+        const stealPercent = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
+        const stolenAmount = Math.floor(target.balance * (stealPercent / 100));
+
+        await DB_MANAGER.updateBalance(env.DB, userId, robber.balance + stolenAmount);
+        await DB_MANAGER.updateBalance(env.DB, targetId, target.balance - stolenAmount);
+
+        await sendMessage(`${UI.BORDER_TOP}\n│ 🦹‍♂️ <b>H E I S T   S U C C E S S</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> ne <b>${targetName}</b> ki jeb kaat li!\n\n💰 <b>Looted:</b> ₹${stolenAmount}\n🏃‍♂️ <i>Bhaag jaldi bhaag!</i>`);
+      } else { // Fail - Pay 15% fine to the target
+        const fineAmount = Math.floor(robber.balance * 0.15); 
+        if (fineAmount > 0) {
+          await DB_MANAGER.updateBalance(env.DB, userId, robber.balance - fineAmount);
+          await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + fineAmount);
+          await sendMessage(`${UI.BORDER_TOP}\n│ 🚨 <b>B U S T E D !</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${firstName}</b> chori karte hue pakda gaya!\n\n💸 <b>Penalty Paid:</b> ₹${fineAmount} to ${targetName}\n👮‍♂️ <i>Agli baar dhyan se!</i>`);
+        } else {
+          await sendMessage(`${UI.BORDER_TOP}\n│ 🚨 <b>B U S T E D !</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${firstName}</b> chori karte hue pakda gaya!\n\nLekin jeb khali hone ki wajah se bas pitayi kha ke chhut gaya.`);
+        }
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
 
   }
 };
