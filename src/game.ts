@@ -377,6 +377,84 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+    // ╭━━━━━━━━━━━━━━━✪ [PING FEATURE]
+    if (text === "/ping") {
+      // 0.001ms edge speed check
+      await sendMessage(`🏓 <b>Pong!</b>\n⚡ Supreme Engine is running flawlessly.`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [ID FEATURE]
+    if (text === "/id") {
+      let idText = `🆔 <b>Your ID:</b> <code>${userId}</code>\n💬 <b>Chat ID:</b> <code>${chatId}</code>`;
+      
+      // Agar kisi ke message par reply kiya hai, toh uska ID bhi dikhao
+      if (update.message.reply_to_message) {
+        const replyId = update.message.reply_to_message.from.id;
+        const replyName = update.message.reply_to_message.from.first_name || "User";
+        idText += `\n👤 <b>${replyName}'s ID:</b> <code>${replyId}</code>`;
+      }
+      
+      await sendMessage(idText);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [SHORT BALANCE FEATURE]
+    if (text === "/bal") {
+      const user = await DB_MANAGER.getUser(env.DB, userId);
+      if (user) {
+        await sendMessage(`💰 <b>Balance:</b> ₹${user.balance}`);
+      } else {
+        await sendMessage(`${EMOJIS.error} Account nahi mila. /start dabao.`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [GOD MODE: TRANSFER FEATURE]
+    if (text.startsWith("/transfer")) {
+      // Security Check: Sirf Owner use kar sakta hai
+      if (userId !== CONFIG.OWNER_ID) {
+        await sendMessage(`${EMOJIS.error} <b>ACCESS DENIED.</b> You don't have Supreme Authority.`);
+        return;
+      }
+
+      if (!update.message.reply_to_message) {
+        await sendMessage(`${EMOJIS.error} <b>Usage:</b> Reply to a user with <code>/transfer [amount]</code>`);
+        return;
+      }
+
+      if (args.length === 0) {
+        await sendMessage(`${EMOJIS.error} Amount missing. Example: <code>/transfer 50000</code>`);
+        return;
+      }
+
+      const amount = parseInt(args[0]);
+      if (isNaN(amount) || amount <= 0) {
+        await sendMessage(`${EMOJIS.error} Valid amount likho boss.`);
+        return;
+      }
+
+      const targetId = update.message.reply_to_message.from.id;
+      const targetName = update.message.reply_to_message.from.first_name || "Agent";
+
+      // Ensure target exists in database
+      await DB_MANAGER.ensureUserExists(env.DB, targetId);
+      const target = await DB_MANAGER.getUser(env.DB, targetId);
+      
+      if (target) {
+        // God Mode: Print money out of thin air
+        await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount);
+        
+        await sendMessage(`${UI.BORDER_TOP}\n│ 👑 <b>S U P R E M E   O R D E R</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} Boss has blessed <b>${targetName}</b> with ₹${amount}!\n🏦 <b>Their New Balance:</b> ₹${target.balance + amount}`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE

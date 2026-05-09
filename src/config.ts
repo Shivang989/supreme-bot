@@ -6,11 +6,12 @@
 import { MarketItem } from './types';
 
 export const CONFIG = {
-  // Apna asli bot token yahan check kar lena
   BOT_TOKEN: "8322009620:AAG7rLte-1Q8-CjKiJqxEppPwjsVFJyvc6U", 
   STARTING_BALANCE: 1000,
-  MARKET_UPDATE_INTERVAL: 300, // 5 minutes (in seconds)
+  MARKET_UPDATE_INTERVAL: 300,
+  OWNER_ID: 8210345021 // 👑 Supreme Boss (You)
 };
+
 
 export const UI = {
   BORDER_TOP: "╭━━━━━━━━━━━━━━━✪",
