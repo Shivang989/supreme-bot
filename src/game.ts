@@ -335,6 +335,48 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+    // ╭━━━━━━━━━━━━━━━✪ [BOSS RAID FEATURE]
+    if (text === "/boss" || text === "/raid") {
+      const user = await DB_MANAGER.getUser(env.DB, userId);
+      
+      if (!user || user.is_alive === 0) {
+        await sendMessage(`${EMOJIS.dead} Murde Boss se nahi ladte. Pehle /revive kar aur apni aukaat bana!`);
+        return;
+      }
+
+      // Player Level = Kills + 1 (Base level 1)
+      const playerLevel = user.kills + 1;
+      
+      // Call The Muscle to calculate Damage
+      const hit = MUSCLE.rollBossDamage(playerLevel);
+      
+      // Boss Defense Threshold (High level danger)
+      const bossDefense = 200; 
+
+      let raidText = `${UI.BORDER_TOP}\n│ 👹 <b>B O S S   R A I D</b>\n${UI.BORDER_BOT}\n\n`;
+      raidText += `⚔️ <b>${firstName}</b> (Lv. ${playerLevel}) attacked the Kingpin's Convoy!\n`;
+      raidText += `💥 <b>Damage Dealt:</b> ${hit.damage} ${hit.is_crit ? "<b>(CRITICAL HIT! 🔥)</b>" : ""}\n\n`;
+
+      // Combat Result
+      if (hit.damage >= bossDefense) {
+        // Victory: Huge Payout (₹2000 to ₹7000)
+        const reward = Math.floor(Math.random() * 5000) + 2000; 
+        await DB_MANAGER.updateBalance(env.DB, userId, user.balance + reward);
+        
+        raidText += `╰━⟮ ${EMOJIS.success} <b>V I C T O R Y</b> ⟯\n│ You broke the convoy's defense!\n│ 💰 <b>Reward:</b> +₹${reward}\n`;
+      } else {
+        // Defeat: Instant Death
+        await DB_MANAGER.setAliveStatus(env.DB, userId, 0);
+        
+        raidText += `╰━⟮ ${EMOJIS.dead} <b>D E F E A T</b> ⟯\n│ The Boss's guards overpowered you.\n│ 🩸 You were killed in action. Use /revive.\n`;
+      }
+      
+      raidText += `${UI.BORDER_BOT}`;
+      await sendMessage(raidText);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
