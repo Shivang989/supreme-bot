@@ -537,62 +537,152 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
-    // ╭━━━━━━━━━━━━━━━✪ [DEFEND / SAFE FEATURE]
+    // ╭━━━━━━━━━━━━━━━✪ [FIXED DEFEND FEATURE]
     if (text.startsWith("/defend") || text.startsWith("/safe")) {
       const user = await DB_MANAGER.getUser(env.DB, userId);
       if (!user) return;
 
+      const currentSeconds = Math.floor(Date.now() / 1000);
+      
+      // LOOPHOLE FIX: Agar protection active hai toh naya nahi kharid sakte
+      if (user.protection_until && user.protection_until > currentSeconds) {
+        const remaining = Math.ceil((user.protection_until - currentSeconds) / 3600);
+        await sendMessage(`${EMOJIS.error} <b>Protection Active!</b>\nAapki security pehle se chalu hai.\n⏳ <b>Remaining:</b> ~${remaining} hours.\nKhatam hone ke baad hi naya plan le sakte hain.`);
+        return;
+      }
+
       if (args.length === 0) {
-        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>B U Y   P R O T E C T I O N</b>\n${UI.BORDER_BOT}\n\nPrevent any harm from <code>/kill</code> and <code>/rob</code>!\n\n<b>Plans available:</b>\n├ <code>/defend 1d</code> ➖ ₹400\n├ <code>/defend 2d</code> ➖ ₹800\n└ <code>/defend 3d</code> ➖ ₹1400\n\n<i>Example: Type <code>/defend 2d</code> to buy.</i>`);
+        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>B U Y   P R O T E C T I O N</b>\n${UI.BORDER_BOT}\n\n<b>Plans:</b>\n├ <code>/defend 1d</code> ➖ ₹400\n├ <code>/defend 2d</code> ➖ ₹800\n└ <code>/defend 3d</code> ➖ ₹1400`);
         return;
       }
 
       const plan = args[0].toLowerCase();
-      let cost = 0;
-      let days = 0;
-
+      let cost = 0; let days = 0;
       if (plan === "1d") { cost = 400; days = 1; }
       else if (plan === "2d") { cost = 800; days = 2; }
       else if (plan === "3d") { cost = 1400; days = 3; }
-      else {
-        await sendMessage(`${EMOJIS.error} Invalid plan. Please choose 1d, 2d, or 3d.`);
-        return;
-      }
+      else { await sendMessage(`${EMOJIS.error} Invalid plan (1d/2d/3d).`); return; }
 
       if (user.balance < cost) {
-        await sendMessage(`${EMOJIS.error} You need ₹${cost} for this protection plan.`);
+        await sendMessage(`${EMOJIS.error} Low balance! ₹${cost} required.`);
         return;
       }
 
-      // Calculate future timestamp
-      const currentSeconds = Math.floor(Date.now() / 1000);
-      let currentProtection = user.protection_until || 0;
-      
-      // Agar pehle se shield hai toh time usme add hoga, warna aaj se shuru hoga
-      if (currentProtection < currentSeconds) currentProtection = currentSeconds;
-      const newProtectionTime = currentProtection + (days * 86400); // 86400 sec in a day
-
+      const newProtectionTime = currentSeconds + (days * 86400);
       await DB_MANAGER.updateBalance(env.DB, userId, user.balance - cost);
       await DB_MANAGER.setProtection(env.DB, userId, newProtectionTime);
 
-      await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>G U A R D S   H I R E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> has hired Underworld Guards for <b>${days} Day(s)</b>!\n\n💰 <b>Cost:</b> ₹${cost}\n🏦 <b>New Balance:</b> ₹${user.balance - cost}\n🛡️ <i>You are now safe from attacks.</i>`);
+      await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>G U A R D S   H I R E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> protected for <b>${days} Day(s)</b>!`);
       return;
     }
-    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
 
     // ╭━━━━━━━━━━━━━━━✪ [GOD MODE: DB UPGRADE]
-    if (text === "/upgradedb") {
+        if (text === "/upgradedb") {
       if (userId !== CONFIG.OWNER_ID) return;
       try {
-        await env.DB.prepare("ALTER TABLE users ADD COLUMN protection_until INTEGER DEFAULT 0").run();
-        await sendMessage("✅ <b>Database Upgraded!</b> Added protection column.");
-      } catch (e: any) {
-        await sendMessage(`⚠️ Note: Column might already exist. Error: ${e.message}`);
+        // Table for Group Admins
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS group_admins (chat_id INTEGER, user_id INTEGER, level INTEGER, title TEXT, PRIMARY KEY(chat_id, user_id))`).run();
+        await sendMessage("✅ <b>Database Upgraded!</b> Admin table created.");
+      } catch (e: any) { await sendMessage(`⚠️ Error: ${e.message}`); }
+      return;
+    }
+
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+
+    // ╭━━━━━━━━━━━━━━━✪ [ADMIN MANAGEMENT: PROMOTE/DEMOTE/TITLE/ADMINS]
+    
+    // Check if caller is Admin or Owner
+    const adminData = await DB_MANAGER.getAdmin(env.DB, chatId, userId);
+    const isOwner = userId === CONFIG.OWNER_ID;
+    const isHighAdmin = (adminData && adminData.level === 3) || isOwner;
+
+    // --- PROMOTE ---
+    if (text.startsWith("/promote")) {
+      if (!isHighAdmin) return;
+      
+      let targetId = update.message.reply_to_message?.from.id;
+      let level = 1;
+
+      // Priority Logic: Check if ID is given in args
+      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
+      const lvlArg = args.find(a => ["1","2","3"].includes(a));
+      
+      if (idArg) targetId = parseInt(idArg);
+      if (lvlArg) level = parseInt(lvlArg);
+
+      if (!targetId) {
+        await sendMessage(`${EMOJIS.error} Reply to user or provide an ID.`);
+        return;
       }
+
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Member");
+      await sendMessage(`✅ <b>PROMOTED!</b>\nUser <code>${targetId}</code> is now a <b>Level ${level} Admin</b> in this group.`);
+      return;
+    }
+
+    // --- DEMOTE ---
+    if (text.startsWith("/demote")) {
+      if (!isHighAdmin) return;
+      let targetId = update.message.reply_to_message?.from.id;
+      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
+      if (idArg) targetId = parseInt(idArg);
+
+      if (!targetId) return;
+      await DB_MANAGER.removeAdmin(env.DB, chatId, targetId);
+      await sendMessage(`❌ <b>DEMOTED!</b>\nUser <code>${targetId}</code> removed from Admin list.`);
+      return;
+    }
+
+    // --- TITLE ---
+    if (text.startsWith("/title")) {
+      if (!isHighAdmin) return;
+      let targetId = update.message.reply_to_message?.from.id;
+      let titleName = args.filter(a => isNaN(parseInt(a)) || a.length < 7).join(" ");
+      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
+      if (idArg) targetId = parseInt(idArg);
+
+      if (!targetId || !titleName) {
+        await sendMessage(`${EMOJIS.error} Usage: /title [name] [id/reply]`);
+        return;
+      }
+
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName);
+
+      // Telegram API Call to set Tag (Bot must have 'Add Admin' rights)
+      try {
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, user_id: targetId, can_manage_chat: true })
+        });
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/setChatAdministratorCustomTitle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, user_id: targetId, custom_title: titleName })
+        });
+      } catch (e) {}
+
+      await sendMessage(`🏷️ <b>TITLE UPDATED!</b>\nTarget <code>${targetId}</code> is now tagged as: <b>${titleName}</b>`);
+      return;
+    }
+
+    // --- ADMINS LIST ---
+    if (text === "/admins") {
+      const allAdmins = await DB_MANAGER.getAllAdmins(env.DB, chatId);
+      let list = `${UI.BORDER_TOP}\n│ 🛡️ <b>G R O U P   A D M I N S</b>\n${UI.BORDER_BOT}\n\n`;
+      if (allAdmins.length === 0) list += "No custom admins registered.";
+      else {
+        for (const a of allAdmins) {
+          list += `👤 <code>${a.user_id}</code>\n└ 🎖️ <b>Lvl ${a.level}</b> | 🏷️ <i>${a.title}</i>\n\n`;
+        }
+      }
+      await sendMessage(list + UI.BORDER_BOT);
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
-
+    
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE

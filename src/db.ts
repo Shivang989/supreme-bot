@@ -65,6 +65,31 @@ export const DB_MANAGER = {
   // 9. Shield/Protection Timer Update karna
   async setProtection(db: D1Database, userId: number, timestamp: number): Promise<void> {
     await db.prepare("UPDATE users SET protection_until = ? WHERE user_id = ?").bind(timestamp, userId).run();
+  },
+
+  // 10. Admin Level & Title Set karna
+  async setAdmin(db: D1Database, chatId: number, userId: number, level: number, title: string): Promise<void> {
+    await db.prepare(`
+      INSERT INTO group_admins (chat_id, user_id, level, title) VALUES (?, ?, ?, ?)
+      ON CONFLICT(chat_id, user_id) DO UPDATE SET level = ?, title = ?
+    `).bind(chatId, userId, level, title, level, title).run();
+  },
+
+  // 11. Admin Check karna
+  async getAdmin(db: D1Database, chatId: number, userId: number): Promise<{level: number, title: string} | null> {
+    const { results } = await db.prepare("SELECT level, title FROM group_admins WHERE chat_id = ? AND user_id = ?").bind(chatId, userId).all();
+    return (results && results.length > 0) ? results[0] as any : null;
+  },
+
+  // 12. Admin Remove karna
+  async removeAdmin(db: D1Database, chatId: number, userId: number): Promise<void> {
+    await db.prepare("DELETE FROM group_admins WHERE chat_id = ? AND user_id = ?").bind(chatId, userId).run();
+  },
+
+  // 13. Group ke saare admins ki list
+  async getAllAdmins(db: D1Database, chatId: number): Promise<any[]> {
+    const { results } = await db.prepare("SELECT user_id, level, title FROM group_admins WHERE chat_id = ? ORDER BY level DESC").bind(chatId).all();
+    return results || [];
   }
 
 };
