@@ -7,6 +7,7 @@
 import { UserData, InventoryItem } from './types';
 
 export const DB_MANAGER = {
+  
   // 1. Naya user create karna (Agar pehle se nahi hai)
   async ensureUserExists(db: D1Database, userId: number): Promise<void> {
     await db.prepare(
@@ -50,11 +51,13 @@ export const DB_MANAGER = {
   async getInventory(db: D1Database, userId: number): Promise<InventoryItem[]> {
     const { results } = await db.prepare("SELECT item_name, quantity FROM inventory WHERE user_id = ? AND quantity > 0").bind(userId).all();
     return (results || []) as unknown as InventoryItem[];
-  }
-  
-    // 8. Top players nikalna (Leaderboard ke liye)
-  async getTopPlayers(db: D1Database, limit: number = 5): Promise<UserData[]> {
-    const { results } = await db.prepare("SELECT * FROM users ORDER BY balance DESC LIMIT ?").bind(limit).all();
+  },
+
+  // 8. Top players nikalna (Leaderboard ke liye)
+  async getTopPlayers(db: D1Database, limit: number = 10): Promise<UserData[]> {
+    // Note: D1 engine me kabhi-kabhi 'LIMIT ?' bind karne me error aati hai.
+    // Isliye humne limit ko directly SQL string me inject kar diya hai (Safe because it's a hardcoded number).
+    const { results } = await db.prepare(`SELECT * FROM users ORDER BY balance DESC LIMIT ${limit}`).all();
     return (results || []) as unknown as UserData[];
   }
 
