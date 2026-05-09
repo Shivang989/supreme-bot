@@ -236,7 +236,14 @@ ${UI.BORDER_BOT}`;
       await DB_MANAGER.ensureUserExists(env.DB, targetId);
       const target = await DB_MANAGER.getUser(env.DB, targetId);
       
-      if (!target || target.is_alive === 0) {
+      if (!target || target.is_alive === 0) 
+            // SHIELD CHECK (Insert inside /kill and /rob logic)
+      const currentSeconds = Math.floor(Date.now() / 1000);
+      if (target.protection_until && target.protection_until > currentSeconds) {
+        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>A T T A C K   B L O C K E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${targetName}</b> is under Underworld Protection!\nGuard dogs chased you away.`);
+        return;
+      }
+      {
         await sendMessage(`${EMOJIS.error} Murdo ke paas paise nahi hote bhai.`);
         return;
       }
@@ -509,6 +516,63 @@ ${UI.BORDER_BOT}`;
         await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount);
 
         await sendMessage(`${UI.BORDER_TOP}\n│ 💸 <b>M O N E Y   T R A N S F E R</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> ne <b>${targetName}</b> ko ₹${amount} diye!\n\n🏦 <b>Your New Balance:</b> ₹${sender.balance - amount}`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+
+    // ╭━━━━━━━━━━━━━━━✪ [DEFEND / SAFE FEATURE]
+    if (text.startsWith("/defend") || text.startsWith("/safe")) {
+      const user = await DB_MANAGER.getUser(env.DB, userId);
+      if (!user) return;
+
+      if (args.length === 0) {
+        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>B U Y   P R O T E C T I O N</b>\n${UI.BORDER_BOT}\n\nPrevent any harm from <code>/kill</code> and <code>/rob</code>!\n\n<b>Plans available:</b>\n├ <code>/defend 1d</code> ➖ ₹400\n├ <code>/defend 2d</code> ➖ ₹800\n└ <code>/defend 3d</code> ➖ ₹1400\n\n<i>Example: Type <code>/defend 2d</code> to buy.</i>`);
+        return;
+      }
+
+      const plan = args[0].toLowerCase();
+      let cost = 0;
+      let days = 0;
+
+      if (plan === "1d") { cost = 400; days = 1; }
+      else if (plan === "2d") { cost = 800; days = 2; }
+      else if (plan === "3d") { cost = 1400; days = 3; }
+      else {
+        await sendMessage(`${EMOJIS.error} Invalid plan. Please choose 1d, 2d, or 3d.`);
+        return;
+      }
+
+      if (user.balance < cost) {
+        await sendMessage(`${EMOJIS.error} You need ₹${cost} for this protection plan.`);
+        return;
+      }
+
+      // Calculate future timestamp
+      const currentSeconds = Math.floor(Date.now() / 1000);
+      let currentProtection = user.protection_until || 0;
+      
+      // Agar pehle se shield hai toh time usme add hoga, warna aaj se shuru hoga
+      if (currentProtection < currentSeconds) currentProtection = currentSeconds;
+      const newProtectionTime = currentProtection + (days * 86400); // 86400 sec in a day
+
+      await DB_MANAGER.updateBalance(env.DB, userId, user.balance - cost);
+      await DB_MANAGER.setProtection(env.DB, userId, newProtectionTime);
+
+      await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>G U A R D S   H I R E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> has hired Underworld Guards for <b>${days} Day(s)</b>!\n\n💰 <b>Cost:</b> ₹${cost}\n🏦 <b>New Balance:</b> ₹${user.balance - cost}\n🛡️ <i>You are now safe from attacks.</i>`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [GOD MODE: DB UPGRADE]
+    if (text === "/upgradedb") {
+      if (userId !== CONFIG.OWNER_ID) return;
+      try {
+        await env.DB.prepare("ALTER TABLE users ADD COLUMN protection_until INTEGER DEFAULT 0").run();
+        await sendMessage("✅ <b>Database Upgraded!</b> Added protection column.");
+      } catch (e: any) {
+        await sendMessage(`⚠️ Note: Column might already exist. Error: ${e.message}`);
       }
       return;
     }

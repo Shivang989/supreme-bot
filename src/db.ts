@@ -11,7 +11,7 @@ export const DB_MANAGER = {
   // 1. Naya user create karna (Agar pehle se nahi hai)
   async ensureUserExists(db: D1Database, userId: number): Promise<void> {
     await db.prepare(
-      "INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills) VALUES (?, 1000, 1, 0)"
+      "INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, protection_until) VALUES (?, 1000, 1, 0, 0)"
     ).bind(userId).run();
   },
 
@@ -59,6 +59,11 @@ export const DB_MANAGER = {
     // Isliye humne limit ko directly SQL string me inject kar diya hai (Safe because it's a hardcoded number).
     const { results } = await db.prepare(`SELECT * FROM users ORDER BY balance DESC LIMIT ${limit}`).all();
     return (results || []) as unknown as UserData[];
+  },
+
+  // 9. Shield/Protection Timer Update karna
+  async setProtection(db: D1Database, userId: number, timestamp: number): Promise<void> {
+    await db.prepare("UPDATE users SET protection_until = ? WHERE user_id = ?").bind(timestamp, userId).run();
   }
 
 };

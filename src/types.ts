@@ -13,6 +13,7 @@ export interface UserData {
   balance: number;
   is_alive: number; // 1 = Alive, 0 = Dead
   kills: number;
+  protection_until: number;
 }
 
 export interface InventoryItem {
