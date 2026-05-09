@@ -11,9 +11,10 @@ export const DB_MANAGER = {
   // 1. Naya user create karna (Agar pehle se nahi hai)
   async ensureUserExists(db: D1Database, userId: number): Promise<void> {
     await db.prepare(
-      "INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, protection_until) VALUES (?, 1000, 1, 0, 0)"
+      "INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills) VALUES (?, 1000, 1, 0)"
     ).bind(userId).run();
   },
+
 
   // 2. User ka pura data nikalna
   async getUser(db: D1Database, userId: number): Promise<UserData | null> {
