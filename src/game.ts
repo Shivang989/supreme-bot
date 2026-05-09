@@ -108,57 +108,7 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
-    // ╭━━━━━━━━━━━━━━━✪ [KILL FEATURE]
-    if (text.startsWith("/kill") || text.startsWith("/k ")) {
-      if (!update.message.reply_to_message) {
-        await sendMessage(`${EMOJIS.error} Kisko tapkana hai? Reply to a player.`);
-        return;
-      }
 
-      const targetId = update.message.reply_to_message.from.id;
-      const targetName = update.message.reply_to_message.from.first_name || "Agent";
-
-      if (userId === targetId) {
-        await sendMessage(`${EMOJIS.error} Khud ko kyu maar raha hai bhai?`);
-        return;
-      }
-      if (update.message.reply_to_message.from.is_bot) {
-        await sendMessage(`${EMOJIS.error} Bot pe goli nahi chalti.`);
-        return;
-      }
-
-      // Ensure target exists in DB
-      await DB_MANAGER.ensureUserExists(env.DB, targetId);
-
-      const caller = await DB_MANAGER.getUser(env.DB, userId);
-      if (!caller || caller.is_alive === 0) {
-        await sendMessage(`${EMOJIS.dead} Tu pehle hi mar chuka hai! Use /revive first.`);
-        return;
-      }
-
-      // The 50/50 RNG Math
-      const roll = Math.floor(Math.random() * 100) + 1;
-
-      if (roll <= 50) { // Success
-        await DB_MANAGER.setAliveStatus(env.DB, targetId, 0); // Target Dead
-        await DB_MANAGER.addKill(env.DB, userId); // +1 Kill
-
-        // Loot Item
-        const STANDARD_DROPS = ["cheap_watch", "stolen_phone", "gold_chain"];
-        const dropItem = STANDARD_DROPS[Math.floor(Math.random() * STANDARD_DROPS.length)];
-        
-        await DB_MANAGER.addInventoryItem(env.DB, userId, dropItem, 1);
-
-        const itemDisplay = MARKET_ITEMS[dropItem]?.name.toUpperCase() || dropItem.toUpperCase();
-        const dropEmoji = MARKET_ITEMS[dropItem]?.emoji || "📦";
-
-        await sendMessage(`${EMOJIS.gun} <b>BRUTAL MURDER!</b>\n<b>${firstName}</b> eliminated <b>${targetName}</b> in cold blood!\n${EMOJIS.vault} Searched the body and found a <b>[${dropEmoji} ${itemDisplay}]</b>!`);
-      } else { // Miss
-        await sendMessage(`💨 <b>WEAPON JAMMED!</b>\n<b>${firstName}</b> aimed at <b>${targetName}</b> but missed the shot!\n🏃 The target escaped unharmed.`);
-      }
-      return;
-    }
-    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
     // ╭━━━━━━━━━━━━━━━✪ [INVENTORY FEATURE]
     if (text.startsWith("/inv")) {
@@ -211,6 +161,71 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+    // ╭━━━━━━━━━━━━━━━✪ [KILL FEATURE]
+    if (text.startsWith("/kill") || text.startsWith("/k ")) {
+      if (!update.message.reply_to_message) {
+        await sendMessage(`${EMOJIS.error} Kisko tapkana hai? Reply to a player.`);
+        return;
+      }
+
+      const targetId = update.message.reply_to_message.from.id;
+      const targetName = update.message.reply_to_message.from.first_name || "Agent";
+
+      if (userId === targetId) {
+        await sendMessage(`${EMOJIS.error} Khud ko kyu maar raha hai bhai?`);
+        return;
+      }
+      if (update.message.reply_to_message.from.is_bot) {
+        await sendMessage(`${EMOJIS.error} Bot pe goli nahi chalti.`);
+        return;
+      }
+
+      await DB_MANAGER.ensureUserExists(env.DB, targetId);
+
+      const caller = await DB_MANAGER.getUser(env.DB, userId);
+      if (!caller || caller.is_alive === 0) {
+        await sendMessage(`${EMOJIS.dead} Tu pehle hi mar chuka hai! Use /revive first.`);
+        return;
+      }
+
+      const target = await DB_MANAGER.getUser(env.DB, targetId);
+      if (!target || target.is_alive === 0) {
+        await sendMessage(`${EMOJIS.error} <b>${targetName}</b> pehle se mara hua hai.`);
+        return;
+      }
+
+      // 🛡️ SHIELD CHECK FOR KILL
+      const currentSeconds = Math.floor(Date.now() / 1000);
+      if (target.protection_until && target.protection_until > currentSeconds) {
+        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>A T T A C K   B L O C K E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${targetName}</b> is under Underworld Protection!\nGuard dogs chased you away.`);
+        return;
+      }
+
+      // The 50/50 RNG Math
+      const roll = Math.floor(Math.random() * 100) + 1;
+
+      if (roll <= 50) { // Success
+        await DB_MANAGER.setAliveStatus(env.DB, targetId, 0); // Target Dead
+        await DB_MANAGER.addKill(env.DB, userId); // +1 Kill
+
+        // Loot Item
+        const STANDARD_DROPS = ["cheap_watch", "stolen_phone", "gold_chain"];
+        const dropItem = STANDARD_DROPS[Math.floor(Math.random() * STANDARD_DROPS.length)];
+        
+        await DB_MANAGER.addInventoryItem(env.DB, userId, dropItem, 1);
+
+        const itemDisplay = MARKET_ITEMS[dropItem]?.name.toUpperCase() || dropItem.toUpperCase();
+        const dropEmoji = MARKET_ITEMS[dropItem]?.emoji || "📦";
+
+        await sendMessage(`${EMOJIS.gun} <b>BRUTAL MURDER!</b>\n<b>${firstName}</b> eliminated <b>${targetName}</b> in cold blood!\n${EMOJIS.vault} Searched the body and found a <b>[${dropEmoji} ${itemDisplay}]</b>!`);
+      } else { // Miss
+        await sendMessage(`💨 <b>WEAPON JAMMED!</b>\n<b>${firstName}</b> aimed at <b>${targetName}</b> but missed the shot!\n🏃 The target escaped unharmed.`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
     // ╭━━━━━━━━━━━━━━━✪ [ROB FEATURE]
     if (text.startsWith("/rob")) {
       if (!update.message.reply_to_message) {
@@ -236,15 +251,15 @@ ${UI.BORDER_BOT}`;
       await DB_MANAGER.ensureUserExists(env.DB, targetId);
       const target = await DB_MANAGER.getUser(env.DB, targetId);
       
-      if (!target || target.is_alive === 0) 
-            // SHIELD CHECK (Insert inside /kill and /rob logic)
+      if (!target || target.is_alive === 0) {
+        await sendMessage(`${EMOJIS.error} Murdo ke paas paise nahi hote bhai.`);
+        return;
+      }
+
+      // 🛡️ SHIELD CHECK FOR ROBBERY
       const currentSeconds = Math.floor(Date.now() / 1000);
       if (target.protection_until && target.protection_until > currentSeconds) {
         await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>A T T A C K   B L O C K E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${targetName}</b> is under Underworld Protection!\nGuard dogs chased you away.`);
-        return;
-      }
-      {
-        await sendMessage(`${EMOJIS.error} Murdo ke paas paise nahi hote bhai.`);
         return;
       }
 
@@ -257,7 +272,6 @@ ${UI.BORDER_BOT}`;
       const roll = Math.floor(Math.random() * 100) + 1;
       
       if (roll <= 45) { // Success
-        // Steal 10% to 30% of target's balance
         const stealPercent = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
         const stolenAmount = Math.floor(target.balance * (stealPercent / 100));
 
@@ -278,6 +292,7 @@ ${UI.BORDER_BOT}`;
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
 
     // ╭━━━━━━━━━━━━━━━✪ [SELL FEATURE]
     if (text.startsWith("/sell")) {
