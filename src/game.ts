@@ -271,6 +271,69 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+    // ╭━━━━━━━━━━━━━━━✪ [SELL FEATURE]
+    if (text.startsWith("/sell")) {
+      if (args.length === 0) {
+        await sendMessage(`${EMOJIS.error} Kya bechna hai? Usage: <code>/sell [item_name]</code>\nExample: <code>/sell stolen_phone</code>`);
+        return;
+      }
+
+      const itemToSell = args[0].toLowerCase();
+      const itemData = MARKET_ITEMS[itemToSell];
+
+      if (!itemData) {
+        await sendMessage(`${EMOJIS.error} Ye kachra Underworld market me nahi bikta.`);
+        return;
+      }
+
+      const invItems = await DB_MANAGER.getInventory(env.DB, userId);
+      const userItem = invItems.find((i) => i.item_name === itemToSell);
+
+      if (!userItem || userItem.quantity < 1) {
+        await sendMessage(`${EMOJIS.error} Tere paas ye item nahi hai. Pehle /inv check kar.`);
+        return;
+      }
+
+      const user = await DB_MANAGER.getUser(env.DB, userId);
+      if (!user) return;
+
+      // Calculate current live price from Muscle
+      const currentTime = Math.floor(Date.now() / 1000);
+      const sellPrice = MUSCLE.calculateMarketPrice(itemData.base_price, itemData.volatility, currentTime);
+
+      // Clinic updates (Remove 1 item, Add money)
+      await DB_MANAGER.addInventoryItem(env.DB, userId, itemToSell, -1);
+      await DB_MANAGER.updateBalance(env.DB, userId, user.balance + sellPrice);
+
+      await sendMessage(`${UI.BORDER_TOP}\n│ 🤝 <b>D E A L   D O N E</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> sold 1x <b>${itemData.emoji} ${itemData.name.toUpperCase()}</b>!\n\n💰 <b>Earned:</b> ₹${sellPrice}\n🏦 <b>New Balance:</b> ₹${user.balance + sellPrice}`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [LEADERBOARD FEATURE]
+    if (text === "/leaderboard" || text === "/top") {
+      const topPlayers = await DB_MANAGER.getTopPlayers(env.DB, 5);
+      
+      let lbText = `${UI.BORDER_TOP}\n│ 🏆 <b>T O P   B O S S E S</b>\n${UI.BORDER_BOT}\n\n`;
+      
+      if (!topPlayers || topPlayers.length === 0) {
+        lbText += "No players found in the Underworld.";
+      } else {
+        let rank = 1;
+        for (const p of topPlayers) {
+          const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "🏅";
+          lbText += `<b>${medal} Rank ${rank}</b>\n`;
+          lbText += `├ 🆔 <code>${p.user_id}</code>\n`;
+          lbText += `├ 💰 Net Worth: ₹${p.balance}\n`;
+          lbText += `└ 🔪 Kills: ${p.kills}\n\n`;
+          rank++;
+        }
+      }
+      lbText += `${UI.BORDER_BOT}`;
+      await sendMessage(lbText);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
   }
 };

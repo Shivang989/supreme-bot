@@ -51,6 +51,13 @@ export const DB_MANAGER = {
     const { results } = await db.prepare("SELECT item_name, quantity FROM inventory WHERE user_id = ? AND quantity > 0").bind(userId).all();
     return (results || []) as unknown as InventoryItem[];
   }
+  
+    // 8. Top players nikalna (Leaderboard ke liye)
+  async getTopPlayers(db: D1Database, limit: number = 5): Promise<UserData[]> {
+    const { results } = await db.prepare("SELECT * FROM users ORDER BY balance DESC LIMIT ?").bind(limit).all();
+    return (results || []) as unknown as UserData[];
+  }
+
 };
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
