@@ -1,9 +1,6 @@
 // ╭━━━━━━━━━━━━━━━✪
 // │ 🧠 THE MANAGER (INDEX / ROUTER)
 // ╰━━━━━━━━━━━━━━━✪
-// Ye humare bot ka main darwaza hai. Telegram ka har message yahan aayega,
-// aur ye Manager us message ko padh kar 'game.ts' (Arena) mein bhej dega.
-
 import { GAME } from './game';
 import { CONFIG } from './config';
 import { CloudflareEnv } from './types';
@@ -14,13 +11,14 @@ export default {
       try {
         const update: any = await request.json();
 
-        // Agar message aur text exist karta hai tabhi aage badho
         if (update.message && update.message.text) {
           const chatId = update.message.chat.id;
           const text: string = update.message.text.trim();
+          
+          // STEP 1: Pehle time record karo
           const startTime = Date.now();
-          ctx.waitUntil(GAME.processCommand(text, update, env, sendMessage, startTime));
-          // ✉️ Telegram ko reply bhejne ka engine
+
+          // STEP 2: Phir sendMessage tool (function) banao
           const sendMessage = async (msg: string) => {
             await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
               method: "POST",
@@ -33,13 +31,10 @@ export default {
             });
           };
 
-          // ⚡ CLOUDFLARE MAGIC: ctx.waitUntil()
-          // Ye command script ko background mein chala degi bina response ko block kiye.
-          // Isse bot ki speed 10x fast ho jayegi!
-          ctx.waitUntil(GAME.processCommand(text, update, env, sendMessage));
+          // STEP 3: Sabse end mein Engine ko call karo, jab sab ready ho
+          ctx.waitUntil(GAME.processCommand(text, update, env, sendMessage, startTime));
         }
         
-        // Telegram ko instantly OK bhej do (0.001ms) taaki webhook hang na ho
         return new Response("OK", { status: 200 });
       } catch (error) {
         console.error("Critical Router Error:", error);
@@ -47,7 +42,6 @@ export default {
       }
     }
 
-    // Agar koi browser mein link kholega toh ye dikhega
     return new Response("🚀 Supreme Engine is ONLINE and 100% Modular!", { status: 200 });
   },
 };
