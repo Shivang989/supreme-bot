@@ -11,7 +11,8 @@ import { CloudflareEnv } from './types';
 
 export const GAME = {
   // Ye main function hai jisme index.ts saare messages bhejega
-  async processCommand(text: string, update: any, env: CloudflareEnv, sendMessage: (msg: string) => Promise<void>), startTime: number) {
+  async processCommand(text: string, update: any, env: CloudflareEnv, sendMessage: any, startTime: number) {
+
     const chatId = update.message.chat.id;
     const userId = update.message.from.id;
     const firstName = update.message.from.first_name || "Agent";
