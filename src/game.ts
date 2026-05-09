@@ -107,6 +107,80 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+    // ╭━━━━━━━━━━━━━━━✪ [KILL FEATURE]
+    if (text.startsWith("/kill") || text.startsWith("/k ")) {
+      if (!update.message.reply_to_message) {
+        await sendMessage(`${EMOJIS.error} Kisko tapkana hai? Reply to a player.`);
+        return;
+      }
+
+      const targetId = update.message.reply_to_message.from.id;
+      const targetName = update.message.reply_to_message.from.first_name || "Agent";
+
+      if (userId === targetId) {
+        await sendMessage(`${EMOJIS.error} Khud ko kyu maar raha hai bhai?`);
+        return;
+      }
+      if (update.message.reply_to_message.from.is_bot) {
+        await sendMessage(`${EMOJIS.error} Bot pe goli nahi chalti.`);
+        return;
+      }
+
+      // Ensure target exists in DB
+      await DB_MANAGER.ensureUserExists(env.DB, targetId);
+
+      const caller = await DB_MANAGER.getUser(env.DB, userId);
+      if (!caller || caller.is_alive === 0) {
+        await sendMessage(`${EMOJIS.dead} Tu pehle hi mar chuka hai! Use /revive first.`);
+        return;
+      }
+
+      // The 50/50 RNG Math
+      const roll = Math.floor(Math.random() * 100) + 1;
+
+      if (roll <= 50) { // Success
+        await DB_MANAGER.setAliveStatus(env.DB, targetId, 0); // Target Dead
+        await DB_MANAGER.addKill(env.DB, userId); // +1 Kill
+
+        // Loot Item
+        const STANDARD_DROPS = ["cheap_watch", "stolen_phone", "gold_chain"];
+        const dropItem = STANDARD_DROPS[Math.floor(Math.random() * STANDARD_DROPS.length)];
+        
+        await DB_MANAGER.addInventoryItem(env.DB, userId, dropItem, 1);
+
+        const itemDisplay = MARKET_ITEMS[dropItem]?.name.toUpperCase() || dropItem.toUpperCase();
+        const dropEmoji = MARKET_ITEMS[dropItem]?.emoji || "📦";
+
+        await sendMessage(`${EMOJIS.gun} <b>BRUTAL MURDER!</b>\n<b>${firstName}</b> eliminated <b>${targetName}</b> in cold blood!\n${EMOJIS.vault} Searched the body and found a <b>[${dropEmoji} ${itemDisplay}]</b>!`);
+      } else { // Miss
+        await sendMessage(`💨 <b>WEAPON JAMMED!</b>\n<b>${firstName}</b> aimed at <b>${targetName}</b> but missed the shot!\n🏃 The target escaped unharmed.`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [INVENTORY FEATURE]
+    if (text.startsWith("/inv")) {
+      const invItems = await DB_MANAGER.getInventory(env.DB, userId);
+      
+      let invText = `${UI.BORDER_TOP}\n│ ${EMOJIS.vault} <b>${firstName.toUpperCase()}'𝐒 𝐕𝐀𝐔𝐋𝐓</b>\n${UI.BORDER_BOT}\n\n`;
+      
+      if (!invItems || invItems.length === 0) {
+        invText += `${EMOJIS.error} <i>Vault is empty. Kill someone to get loot.</i>\n\n${UI.BORDER_BOT}`;
+      } else {
+        for (const row of invItems) {
+          const itemData = MARKET_ITEMS[row.item_name];
+          const emoji = itemData?.emoji || "📦";
+          const nameDisplay = itemData?.name.toUpperCase() || row.item_name.toUpperCase();
+          invText += `╭━⟮ ✦ ${emoji} ${nameDisplay} ✦ ⟯\n│ 📦 𝐐𝐔𝐀𝐍𝐓𝐈𝐓𝐘: ${row.quantity}\n${UI.BORDER_BOT}\n`;
+        }
+      }
+      await sendMessage(invText);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
