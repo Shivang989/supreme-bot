@@ -461,6 +461,59 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+    // ╭━━━━━━━━━━━━━━━✪ [PAY/GIVE FEATURE]
+    if (text.startsWith("/pay") || text.startsWith("/give")) {
+      if (!update.message.reply_to_message) {
+        await sendMessage(`${EMOJIS.error} Kisko paise dene hain? Reply to a player.`);
+        return;
+      }
+
+      if (args.length === 0) {
+        await sendMessage(`${EMOJIS.error} <b>Usage:</b> <code>/pay [amount]</code>\nExample: <code>/pay 500</code>`);
+        return;
+      }
+
+      const amount = parseInt(args[0]);
+      if (isNaN(amount) || amount <= 0) {
+        await sendMessage(`${EMOJIS.error} Sahi amount daal bhai.`);
+        return;
+      }
+
+      const targetId = update.message.reply_to_message.from.id;
+      const targetName = update.message.reply_to_message.from.first_name || "Agent";
+
+      if (userId === targetId) {
+        await sendMessage(`${EMOJIS.error} Khud ko paise kyu de raha hai?`);
+        return;
+      }
+
+      if (update.message.reply_to_message.from.is_bot) {
+        await sendMessage(`${EMOJIS.error} Bot moh-maya se door hai.`);
+        return;
+      }
+
+      const sender = await DB_MANAGER.getUser(env.DB, userId);
+      if (!sender || sender.balance < amount) {
+        await sendMessage(`${EMOJIS.error} Teri jeb me itne paise nahi hain. Balance: ₹${sender?.balance || 0}`);
+        return;
+      }
+
+      // Ensure target exists
+      await DB_MANAGER.ensureUserExists(env.DB, targetId);
+      const target = await DB_MANAGER.getUser(env.DB, targetId);
+
+      if (target) {
+        // Deduct from sender, Add to target
+        await DB_MANAGER.updateBalance(env.DB, userId, sender.balance - amount);
+        await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount);
+
+        await sendMessage(`${UI.BORDER_TOP}\n│ 💸 <b>M O N E Y   T R A N S F E R</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> ne <b>${targetName}</b> ko ₹${amount} diye!\n\n🏦 <b>Your New Balance:</b> ₹${sender.balance - amount}`);
+      }
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
