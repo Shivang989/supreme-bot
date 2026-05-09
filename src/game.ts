@@ -6,7 +6,7 @@
 
 import { DB_MANAGER } from './db';
 import { MUSCLE } from './muscle';
-import { CONFIG, UI, EMOJIS } from './config';
+import { CONFIG, UI, EMOJIS, MARKET_ITEMS } from './config';
 import { CloudflareEnv } from './types';
 
 export const GAME = {
@@ -57,7 +57,7 @@ ${UI.BORDER_BOT}`;
       let marketText = `${UI.BORDER_TOP}\n│ 📈 <b>𝐔𝐍𝐃𝐄𝐑𝐖𝐎𝐑𝐋𝐃 𝐌𝐀𝐑𝐊𝐄𝐓</b>\n${UI.BORDER_BOT}\n\n`;
       
       // CONFIG se items uthayenge aur MUSCLE se price calculate karwayenge
-      for (const [itemKey, data] of Object.entries(CONFIG.MARKET_ITEMS)) {
+      for (const [itemKey, data] of Object.entries(MARKET_ITEMS)) {
           const currentPrice = MUSCLE.calculateMarketPrice(data.base_price, data.volatility, currentTime);
           marketText += `╭━⟮ ✦ ${data.emoji} ${data.name.toUpperCase()} ✦ ⟯\n│ 💰 𝐂𝐔𝐑𝐑𝐄𝐍𝐓 𝐏𝐑𝐈𝐂𝐄: ₹${currentPrice}\n${UI.BORDER_BOT}\n`;
       }
