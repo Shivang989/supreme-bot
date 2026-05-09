@@ -11,7 +11,7 @@ import { CloudflareEnv } from './types';
 
 export const GAME = {
   // Ye main function hai jisme index.ts saare messages bhejega
-  async processCommand(text: string, update: any, env: CloudflareEnv, sendMessage: (msg: string) => Promise<void>) {
+  async processCommand(text: string, update: any, env: CloudflareEnv, sendMessage: (msg: string) => Promise<void>), startTime: number) {
     const chatId = update.message.chat.id;
     const userId = update.message.from.id;
     const firstName = update.message.from.first_name || "Agent";
@@ -378,14 +378,6 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
-    // ╭━━━━━━━━━━━━━━━✪ [PING FEATURE]
-    if (text === "/ping") {
-      // 0.001ms edge speed check
-      await sendMessage(`🏓 <b>Pong!</b>\n⚡ Supreme Engine is running flawlessly.`);
-      return;
-    }
-    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
-
     // ╭━━━━━━━━━━━━━━━✪ [ID FEATURE]
     if (text === "/id") {
       let idText = `🆔 <b>Your ID:</b> <code>${userId}</code>\n💬 <b>Chat ID:</b> <code>${chatId}</code>`;
@@ -402,54 +394,67 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
-    // ╭━━━━━━━━━━━━━━━✪ [SHORT BALANCE FEATURE]
-    if (text === "/bal") {
-      const user = await DB_MANAGER.getUser(env.DB, userId);
+
+    // ╭━━━━━━━━━━━━━━━✪ [PING FEATURE]
+    if (text === "/ping") {
+      const latency = Date.now() - startTime;
+      await sendMessage(`🏓 <b>Pong!</b>\n⚡ <b>Latency:</b> <code>${latency}ms</code>\n📡 <b>Status:</b> <i>Stable & Operational</i>`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+    // ╭━━━━━━━━━━━━━━━✪ [BALANCE FEATURE]
+    if (text.startsWith("/bal")) {
+      let targetId = userId;
+      let targetName = firstName;
+
+      // Agar reply kiya hai toh dost ka balance dikhao
+      if (update.message.reply_to_message) {
+        targetId = update.message.reply_to_message.from.id;
+        targetName = update.message.reply_to_message.from.first_name || "User";
+      }
+
+      const user = await DB_MANAGER.getUser(env.DB, targetId);
       if (user) {
-        await sendMessage(`💰 <b>Balance:</b> ₹${user.balance}`);
+        await sendMessage(`💰 <b>${targetName}'s Balance:</b> ₹${user.balance}`);
       } else {
-        await sendMessage(`${EMOJIS.error} Account nahi mila. /start dabao.`);
+        await sendMessage(`${EMOJIS.error} Account not found.`);
       }
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
-    // ╭━━━━━━━━━━━━━━━✪ [GOD MODE: TRANSFER FEATURE]
+    // =============================================
+    // 👑 G O D   M O D E   S E C T I O N
+    // =============================================
+    // Warning: Only accessible by Supreme Owner.
+
+    // ╭━━━━━━━━━━━━━━━✪ [GOD: TRANSFER/DEDUCT]
     if (text.startsWith("/transfer")) {
-      // Security Check: Sirf Owner use kar sakta hai
-      if (userId !== CONFIG.OWNER_ID) {
-        await sendMessage(`${EMOJIS.error} <b>ACCESS DENIED.</b> You don't have Supreme Authority.`);
+      if (userId !== CONFIG.OWNER_ID) return; // Silent block for non-owners
+
+      if (!update.message.reply_to_message || args.length === 0) {
+        await sendMessage(`${EMOJIS.error} <b>Usage:</b> Reply + <code>/transfer [amount]</code>`);
         return;
       }
 
-      if (!update.message.reply_to_message) {
-        await sendMessage(`${EMOJIS.error} <b>Usage:</b> Reply to a user with <code>/transfer [amount]</code>`);
-        return;
-      }
-
-      if (args.length === 0) {
-        await sendMessage(`${EMOJIS.error} Amount missing. Example: <code>/transfer 50000</code>`);
-        return;
-      }
-
-      const amount = parseInt(args[0]);
-      if (isNaN(amount) || amount <= 0) {
-        await sendMessage(`${EMOJIS.error} Valid amount likho boss.`);
-        return;
-      }
+      const amount = parseInt(args[0]); // negative amount allowed automatically
+      if (isNaN(amount)) return;
 
       const targetId = update.message.reply_to_message.from.id;
       const targetName = update.message.reply_to_message.from.first_name || "Agent";
 
-      // Ensure target exists in database
       await DB_MANAGER.ensureUserExists(env.DB, targetId);
       const target = await DB_MANAGER.getUser(env.DB, targetId);
       
       if (target) {
-        // God Mode: Print money out of thin air
-        await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount);
+        const newBalance = target.balance + amount;
+        await DB_MANAGER.updateBalance(env.DB, targetId, newBalance);
         
-        await sendMessage(`${UI.BORDER_TOP}\n│ 👑 <b>S U P R E M E   O R D E R</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} Boss has blessed <b>${targetName}</b> with ₹${amount}!\n🏦 <b>Their New Balance:</b> ₹${target.balance + amount}`);
+        const action = amount > 0 ? "blessed" : "penalized";
+        const symbol = amount > 0 ? "+" : "";
+
+        await sendMessage(`${UI.BORDER_TOP}\n│ 👑 <b>S U P R E M E   O R D E R</b>\n${UI.BORDER_BOT}\n\nBoss has ${action} <b>${targetName}</b>!\n📊 <b>Transaction:</b> ${symbol}${amount}\n🏦 <b>New Balance:</b> ₹${newBalance}\n${UI.BORDER_BOT}`);
       }
       return;
     }

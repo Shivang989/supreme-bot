@@ -18,7 +18,8 @@ export default {
         if (update.message && update.message.text) {
           const chatId = update.message.chat.id;
           const text: string = update.message.text.trim();
-
+          const startTime = Date.now();
+          ctx.waitUntil(GAME.processCommand(text, update, env, sendMessage, startTime));
           // ✉️ Telegram ko reply bhejne ka engine
           const sendMessage = async (msg: string) => {
             await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
