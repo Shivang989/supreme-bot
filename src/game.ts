@@ -21,13 +21,27 @@ export const GAME = {
     // 1. Ensure user database me hai ya nahi
     await DB_MANAGER.ensureUserExists(env.DB, userId);
 
+
+
     // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
     if (text === "/start") {
+      // NOTE: Replace 'YourBotUsername' with your actual bot's username!
+      const botUsername = "T_he_Main_Bot"; 
+      
+      const replyMarkup = {
+        inline_keyboard: [
+          [{ text: "➕ ADD ME TO YOUR GROUP ➕", url: `https://t.me/${botUsername}?startgroup=true` }]
+        ]
+      };
+
       const msg = `${UI.BORDER_TOP}\n│ 👑 <b>WELCOME TO THE UNDERWORLD</b>\n${UI.BORDER_BOT}\n\nGreetings, ${firstName}!\nYour account is secured in the Cloud Vault.\nUse /profile to check your status.`;
-      await sendMessage(msg);
+      
+      // Notice we are passing replyMarkup as the second argument now
+      await sendMessage(msg, replyMarkup);
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
 
     // ╭━━━━━━━━━━━━━━━✪ [PROFILE FEATURE]
     if (text.startsWith("/profile") || text.startsWith("/me")) {

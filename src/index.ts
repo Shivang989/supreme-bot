@@ -19,15 +19,22 @@ export default {
           const startTime = Date.now();
 
           // STEP 2: Phir sendMessage tool (function) banao
-          const sendMessage = async (msg: string) => {
+          const sendMessage = async (msg: string, reply_markup?: any) => {
+            const payload: any = { 
+              chat_id: chatId, 
+              text: msg, 
+              parse_mode: "HTML" 
+            };
+            
+            // Agar button/keyboard bheja gaya hai, toh payload me add karo
+            if (reply_markup) {
+              payload.reply_markup = reply_markup;
+            }
+
             await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                chat_id: chatId, 
-                text: msg, 
-                parse_mode: "HTML" 
-              })
+              body: JSON.stringify(payload)
             });
           };
 

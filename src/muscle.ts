@@ -49,8 +49,9 @@ export const MUSCLE = {
     }
 
     const payout = Math.floor(investment * multiplier);
-    return { payout, multiplier, event, emoji };
+    return { payout, multiplier, event: eventName, emoji }; // <--- FIXED HERE
   },
+
 
   // 3. Combat & Boss Damage RNG
   rollBossDamage(playerLevel: number): { damage: number, is_crit: boolean } {
