@@ -4,10 +4,12 @@
 // Yahan humare saare commands aur unka UI design rahega.
 // Aage se jab koi naya feature aayega, hum bas use yahan neeche add karenge.
 
+
 import { DB_MANAGER } from './db';
 import { MUSCLE } from './muscle';
 import { CONFIG, UI, EMOJIS, MARKET_ITEMS } from './config';
 import { CloudflareEnv } from './types';
+
 
 export const GAME = {
   // Ye main function hai jisme index.ts saare messages bhejega
@@ -18,11 +20,12 @@ export const GAME = {
     const firstName = update.message.from.first_name || "Agent";
     const args = text.split(" ").slice(1);
 
+
     // 1. Ensure user database me hai ya nahi
     await DB_MANAGER.ensureUserExists(env.DB, userId);
 
 
-
+//=====================================================
     // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
     if (text === "/start") {
       // NOTE: Replace 'YourBotUsername' with your actual bot's username!
@@ -43,6 +46,7 @@ export const GAME = {
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [PROFILE FEATURE]
     if (text.startsWith("/profile") || text.startsWith("/me")) {
       const user = await DB_MANAGER.getUser(env.DB, userId);
@@ -82,6 +86,8 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [INVEST FEATURE]
     if (text.startsWith("/invest")) {
       if (args.length === 0) {
@@ -123,7 +129,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
-
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [INVENTORY FEATURE]
     if (text.startsWith("/inv")) {
       const invItems = await DB_MANAGER.getInventory(env.DB, userId);
@@ -145,6 +151,8 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [REVIVE FEATURE]
     if (text === "/revive" || text === "/heal") {
       const user = await DB_MANAGER.getUser(env.DB, userId);
@@ -176,6 +184,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [KILL FEATURE]
     if (text.startsWith("/kill") || text.startsWith("/k ")) {
       if (!update.message.reply_to_message) {
@@ -240,6 +249,8 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [ROB FEATURE]
     if (text.startsWith("/rob")) {
       if (!update.message.reply_to_message) {
@@ -308,6 +319,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [SELL FEATURE]
     if (text.startsWith("/sell")) {
       if (args.length === 0) {
@@ -347,6 +359,8 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [LEADERBOARD FEATURE]
     if (text === "/leaderboard" || text === "/top") {
       const topPlayers = await DB_MANAGER.getTopPlayers(env.DB, 5);
@@ -372,6 +386,8 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [BOSS RAID FEATURE]
     if (text === "/boss" || text === "/raid") {
       const user = await DB_MANAGER.getUser(env.DB, userId);
@@ -415,6 +431,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [ID FEATURE]
     if (text === "/id") {
       let idText = `🆔 <b>Your ID:</b> <code>${userId}</code>\n💬 <b>Chat ID:</b> <code>${chatId}</code>`;
@@ -432,6 +449,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [PING FEATURE]
     if (text === "/ping") {
       const latency = Date.now() - startTime;
@@ -461,9 +479,12 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
-    // =============================================
+
+    // ===============================================
+    // ===============================================
     // 👑 G O D   M O D E   S E C T I O N
-    // =============================================
+    // ===============================================
+    // ===============================================
     // Warning: Only accessible by Supreme Owner.
 
     // ╭━━━━━━━━━━━━━━━✪ [GOD: TRANSFER/DEDUCT]
@@ -497,7 +518,12 @@ ${UI.BORDER_BOT}`;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
+    // ==============================================
+    // 👑 G O D   M O D E   E N D 
+    // ==============================================
 
+    
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [PAY/GIVE FEATURE]
     if (text.startsWith("/pay") || text.startsWith("/give")) {
       if (!update.message.reply_to_message) {
@@ -551,6 +577,7 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [FIXED DEFEND FEATURE]
     if (text.startsWith("/defend") || text.startsWith("/safe")) {
       const user = await DB_MANAGER.getUser(env.DB, userId);
@@ -605,6 +632,10 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+// ====================================================
+// ==================== A D M I N =====================
+// ====================================================
+   
     // ╭━━━━━━━━━━━━━━━✪ [ADMIN MANAGEMENT: PROMOTE/DEMOTE/TITLE/ADMINS]
     
     // Check if caller is Admin or Owner
@@ -612,6 +643,7 @@ ${UI.BORDER_BOT}`;
     const isOwner = userId === CONFIG.OWNER_ID;
     const isHighAdmin = (adminData && adminData.level === 3) || isOwner;
 
+// ====================================================
     // --- PROMOTE ---
     if (text.startsWith("/promote")) {
       if (!isHighAdmin) return;
@@ -636,6 +668,7 @@ ${UI.BORDER_BOT}`;
       return;
     }
 
+// ====================================================
     // --- DEMOTE ---
     if (text.startsWith("/demote")) {
       if (!isHighAdmin) return;
@@ -682,6 +715,7 @@ ${UI.BORDER_BOT}`;
       return;
     }
 
+// ====================================================
     // --- ADMINS LIST ---
     if (text === "/admins") {
       const allAdmins = await DB_MANAGER.getAllAdmins(env.DB, chatId);
@@ -696,6 +730,10 @@ ${UI.BORDER_BOT}`;
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+    
+    
+    // ====================================================
+    // ====================================================
     
   }
 };

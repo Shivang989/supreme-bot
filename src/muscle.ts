@@ -6,6 +6,7 @@
 
 export const MUSCLE = {
   
+   // ====================================================
   // 1. Market Price Calculator (Based on time & volatility)
   calculateMarketPrice(basePrice: number, volatility: number, currentTimestamp: number): number {
     const timeFactor = currentTimestamp / 300.0; // 5 minute cycles
@@ -19,6 +20,7 @@ export const MUSCLE = {
     return Math.floor(finalPrice);
   },
 
+   // ====================================================
   // 2. High-Frequency Trading RNG (/invest)
   simulateMarket(investment: number): { payout: number, multiplier: number, event: string, emoji: string } {
     const roll = Math.floor(Math.random() * 100) + 1;
@@ -52,7 +54,7 @@ export const MUSCLE = {
     return { payout, multiplier, event: eventName, emoji }; // <--- FIXED HERE
   },
 
-
+   // ====================================================
   // 3. Combat & Boss Damage RNG
   rollBossDamage(playerLevel: number): { damage: number, is_crit: boolean } {
     // 15 to 35 base damage multiplier
@@ -68,6 +70,8 @@ export const MUSCLE = {
     return { damage: baseDmg, is_crit: isCrit };
   }
 
+   // ====================================================
+   
 };
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
