@@ -807,7 +807,14 @@ ${UI.BORDER_BOT}`;
       await editMessageText(chatId, messageId, "⚙️ <b>SETTINGS MENU</b>\nConfigure your Underworld experience:", replyMarkup);
     }
 
-    else if (data === "menu_welcome") {
+       else if (data === "menu_welcome") {
+      // Clear any pending setup session if user clicks Back/Cancel
+      await DB_MANAGER.clearSession(env.DB, userId);
+
+      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+      const isOn = settings && settings.welcome_enabled === 1;
+      const statusText = isOn ? "🟢 ON" : "🔴 OFF";
+      
       const replyMarkup = {
         inline_keyboard: [
           [{ text: "🟢 On", callback_data: "wel_on" }, { text: "🔴 Off", callback_data: "wel_off" }],
@@ -815,7 +822,7 @@ ${UI.BORDER_BOT}`;
           [{ text: "🔙 Back", callback_data: "menu_settings" }]
         ]
       };
-      await editMessageText(chatId, messageId, "👋 <b>WELCOME SETTINGS</b>\nConfigure how new members are greeted:", replyMarkup);
+      await editMessageText(chatId, messageId, `👋 <b>WELCOME SETTINGS</b>\n\nCurrent Status: <b>${statusText}</b>\nConfigure how new members are greeted:`, replyMarkup);
     }
 
     else if (data === "alert_soon") {
@@ -823,19 +830,89 @@ ${UI.BORDER_BOT}`;
     }
 
     else if (data === "wel_on") {
-      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1);
-      await answerCallbackQuery(query.id, "✅ Welcome messages turned ON", true);
-    }
-       else if (data === "wel_see") {
       const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
-      let preview = settings && settings.welcome_text ? settings.welcome_text : "<i>No custom welcome text set. Default will be used.</i>";
-      let mediaStatus = "❌ No Media";
-      if (settings && settings.welcome_media_id && settings.welcome_media_id !== 'none' && settings.welcome_media_id.includes(':')) {
-        mediaStatus = "✅ Media: " + settings.welcome_media_id.split(':')[0].toUpperCase();
+      if (!settings || !settings.welcome_text) {
+        await answerCallbackQuery(query.id, "❌ Please 'Set' a welcome message first!", true);
+        return;
       }
-      await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\n${mediaStatus}`, true);
+      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1);
+      const backMarkup = { inline_keyboard: [[{ text: "🔙 Back", callback_data: "menu_welcome" }]] };
+      await editMessageText(chatId, messageId, "✅ <b>Welcome Messages: ON</b>\n\nNew members will now be greeted automatically.", backMarkup);
     }
-  }, // <--- ⚠️ THIS COMMA IS WHAT FIXES THE CRASH ⚠️
+
+    else if (data === "wel_off") {
+      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+      if (!settings || !settings.welcome_text) {
+        await answerCallbackQuery(query.id, "❌ Please 'Set' a welcome message first!", true);
+        return;
+      }
+      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0);
+      const backMarkup = { inline_keyboard: [[{ text: "🔙 Back", callback_data: "menu_welcome" }]] };
+      await editMessageText(chatId, messageId, "🔴 <b>Welcome Messages: OFF</b>\n\nGreetings are paused.", backMarkup);
+    }
+
+    else if (data === "wel_set") {
+      const expiresAt = Math.floor(Date.now() / 1000) + 1800; // 30 mins limit
+      await DB_MANAGER.setSession(env.DB, userId, chatId, 'awaiting_text', expiresAt);
+      
+      const replyMarkup = { inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "menu_welcome" }]] };
+      await editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n<i>(You can use {name} and {id} in your text)</i>\n\n<i>You have 30 minutes.</i>", replyMarkup);
+    }
+
+    else if (data === "wel_see") {
+      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+      if (!settings || !settings.welcome_text) {
+        await answerCallbackQuery(query.id, "❌ Nothing to see! Please 'Set' a welcome message first.", true);
+        return;
+      }
+      
+      await answerCallbackQuery(query.id); // Stop loading spinner
+      
+      let textTemplate = settings.welcome_text;
+      const mediaData = settings.welcome_media_id; 
+      let finalMsg = textTemplate.replace(/{name}/g, user.first_name).replace(/{id}/g, user.id.toString());
+      finalMsg = "👁️ <b>PREVIEW MODE:</b>\n\n" + finalMsg;
+
+      const backMarkup = { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "menu_welcome" }]] };
+
+      // No Media? Just edit the text.
+      if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
+        await editMessageText(chatId, messageId, finalMsg, backMarkup);
+      } 
+      // Has Media? We must send a new message with the image/video.
+      else {
+        // Delete old menu message so it doesn't clutter the chat
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+        });
+        
+        const [mediaType, fileId] = mediaData.split(':');
+        let endpoint = "";
+        let payload: any = { chat_id: chatId, parse_mode: "HTML", reply_markup: backMarkup };
+
+        if (mediaType === "photo") { endpoint = "sendPhoto"; payload.photo = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "video") { endpoint = "sendVideo"; payload.video = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "animation") { endpoint = "sendAnimation"; payload.animation = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "sticker") { 
+          // Stickers can't have captions. Send sticker, then send text with back button
+          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendSticker`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, sticker: fileId })
+          });
+          endpoint = "sendMessage"; 
+          payload.text = finalMsg;
+        }
+
+        if (endpoint) {
+          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/${endpoint}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        }
+      }
+    }
+  }, // <--- Closes processCallback
 
   // ╭━━━━━━━━━━━━━━━✪
   // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
