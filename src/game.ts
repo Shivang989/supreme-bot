@@ -761,25 +761,18 @@ ${UI.BORDER_BOT}`;
           list += `👤 <code>${a.user_id}</code>\n└ 🎖️ <b>Lvl ${a.level}</b> | 🏷️ <i>${a.title}</i>\n\n`;
         }
       }
-      await sendMessage(list + UI.BORDER_BOT);
+      await sendMessage(chatId, list + UI.BORDER_BOT);
       return;
     }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
     
-    
-    // ====================================================
-    
-    // ====================================================
-    
-  }
-
-     // ====================================================
-    // ====================================================
-   // ╭━━━━━━━━━━━━━━━✪
-   // │ 🕹️ CALLBACK ROUTER (BUTTON CLICKS)
-   // ╰━━━━━━━━━━━━━━━✪
- // ====================================================
-// ====================================================
+  }, // <--- ⚠️ THIS IS THE MAGIC COMMA THAT FIXES THE CRASH ⚠️
+  
+  // ====================================================
+  // ====================================================
+  // ╭━━━━━━━━━━━━━━━✪
+  // │ 🕹️ CALLBACK ROUTER (BUTTON CLICKS)
+  // ╰━━━━━━━━━━━━━━━✪
   async processCallback(query: any, env: CloudflareEnv, editMessageText: any, answerCallbackQuery: any) {
     const data = query.data;
     const chatId = query.message.chat.id;
@@ -789,7 +782,7 @@ ${UI.BORDER_BOT}`;
     await answerCallbackQuery(query.id); // Stops the loading spinner
 
     if (data === "menu_start") {
-      const botUsername = "YOUR_BOT_USERNAME"; // <-- CHANGE THIS
+      const botUsername = "YOUR_BOT_USERNAME"; // <-- DON'T FORGET TO CHANGE THIS
       const replyMarkup = {
         inline_keyboard: [
           [{ text: "➕ Add me to your group", url: `https://t.me/${botUsername}?startgroup=true` }],
@@ -849,5 +842,5 @@ ${UI.BORDER_BOT}`;
       await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\nMedia: ${mediaStatus}`, true);
     }
   }
-};
+}; // <--- PROPERLY CLOSES THE 'GAME' OBJECT
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
