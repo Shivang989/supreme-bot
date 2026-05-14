@@ -57,6 +57,93 @@ exports.DB_MANAGER = {
             });
         });
     },
+    // 1.5. Database Upgrades for Settings & Sessions
+    initSettings: function (db) {
+        return __awaiter(this, void 0, Promise, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, db.prepare("\n      CREATE TABLE IF NOT EXISTS group_settings (\n        chat_id INTEGER PRIMARY KEY,\n        welcome_enabled INTEGER DEFAULT 0,\n        welcome_text TEXT DEFAULT '',\n        welcome_media_id TEXT DEFAULT ''\n      )\n    ").run()];
+                    case 1:
+                        _a.sent();
+                        return [4 /*yield*/, db.prepare("\n      CREATE TABLE IF NOT EXISTS setup_sessions (\n        user_id INTEGER PRIMARY KEY,\n        chat_id INTEGER,\n        step TEXT,\n        expires_at INTEGER\n      )\n    ").run()];
+                    case 2:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    },
+    // Session State Machine Helpers
+    setSession: function (db, userId, chatId, step, expiresAt) {
+        return __awaiter(this, void 0, Promise, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, db.prepare("INSERT INTO setup_sessions (user_id, chat_id, step, expires_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET step=?, expires_at=?")
+                            .bind(userId, chatId, step, expiresAt, step, expiresAt).run()];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    },
+    getSession: function (db, userId) {
+        return __awaiter(this, void 0, Promise, function () {
+            var results;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, db.prepare("SELECT * FROM setup_sessions WHERE user_id = ?").bind(userId).all()];
+                    case 1:
+                        results = (_a.sent()).results;
+                        return [2 /*return*/, results.length > 0 ? results[0] : null];
+                }
+            });
+        });
+    },
+    clearSession: function (db, userId) {
+        return __awaiter(this, void 0, Promise, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, db.prepare("DELETE FROM setup_sessions WHERE user_id = ?").bind(userId).run()];
+                    case 1:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    },
+    // Group Settings Helpers
+    getGroupSettings: function (db, chatId) {
+        return __awaiter(this, void 0, Promise, function () {
+            var results;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, db.prepare("SELECT * FROM group_settings WHERE chat_id = ?").bind(chatId).all()];
+                    case 1:
+                        results = (_a.sent()).results;
+                        return [2 /*return*/, results.length > 0 ? results[0] : null];
+                }
+            });
+        });
+    },
+    updateGroupSetting: function (db, chatId, column, value) {
+        return __awaiter(this, void 0, Promise, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: 
+                    // Upsert logic for settings
+                    return [4 /*yield*/, db.prepare("INSERT OR IGNORE INTO group_settings (chat_id) VALUES (?)").bind(chatId).run()];
+                    case 1:
+                        // Upsert logic for settings
+                        _a.sent();
+                        return [4 /*yield*/, db.prepare("UPDATE group_settings SET ".concat(column, " = ? WHERE chat_id = ?")).bind(value, chatId).run()];
+                    case 2:
+                        _a.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    },
     // ====================================================
     // 2. User ka pura data nikalna
     getUser: function (db, userId) {

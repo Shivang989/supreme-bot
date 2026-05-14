@@ -13,36 +13,71 @@ import { CloudflareEnv } from './types';
 
 export const GAME = {
   // Ye main function hai jisme index.ts saare messages bhejega
-  async processCommand(text: string, update: any, env: CloudflareEnv, sendMessage: any, startTime: number) {
+ 
+  async processCommand(update: any, env: CloudflareEnv, sendMessage: any, startTime: number) {
+    const message = update.message;
+    const chatId = message.chat.id;
+    const userId = message.from.id;
+    const firstName = message.from.first_name || "Agent";
+    
+    // Check if user is in a "Setup Session" (State Machine)
+    const session = await DB_MANAGER.getSession(env.DB, userId);
+    const currentTime = Math.floor(Date.now() / 1000);
 
-    const chatId = update.message.chat.id;
-    const userId = update.message.from.id;
-    const firstName = update.message.from.first_name || "Agent";
+    if (session && session.expires_at > currentTime) {
+      if (session.step === 'awaiting_text' && message.text) {
+        await DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_text', message.text);
+        await DB_MANAGER.setSession(env.DB, userId, session.chat_id, 'awaiting_media', currentTime + 1800);
+        await sendMessage(chatId, "✅ <b>Text Saved!</b>\nNow send the Media (Photo, Video under 15s, or Sticker).\n<i>Send 'skip' if you only want text.</i>");
+        return;
+      }
+      if (session.step === 'awaiting_media') {
+        let fileId = "";
+        if (message.photo) fileId = message.photo[message.photo.length - 1].file_id;
+        else if (message.video) fileId = message.video.file_id;
+        else if (message.sticker) fileId = message.sticker.file_id;
+        else if (message.text && message.text.toLowerCase() === 'skip') fileId = "none";
+
+        if (fileId) {
+          await DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileId);
+          await DB_MANAGER.clearSession(env.DB, userId);
+          await sendMessage(chatId, "🎉 <b>Welcome Setup Complete!</b>\nUse the 'See' button in settings to test it.");
+          return;
+        } else {
+          await sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, Sticker, or type 'skip'.");
+          return;
+        }
+      }
+    } else if (session && session.expires_at <= currentTime) {
+       await DB_MANAGER.clearSession(env.DB, userId); // Cleanup expired session
+    }
+
+    // Normal command parsing...
+    const text = message.text ? message.text.trim() : "";
     const args = text.split(" ").slice(1);
-
-
-    // 1. Ensure user database me hai ya nahi
     await DB_MANAGER.ensureUserExists(env.DB, userId);
 
 
+
 //=====================================================
-    // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
-    if (text === "/start") {
-      // NOTE: Replace 'YourBotUsername' with your actual bot's username!
-      const botUsername = "T_he_Main_Bot"; 
+   // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
+    if (text.startsWith("/start")) {
+      const botUsername = "T_he_Main_Bot"; // <-- CHANGE THIS
       
       const replyMarkup = {
         inline_keyboard: [
-          [{ text: "➕ ADD ME TO YOUR GROUP ➕", url: `https://t.me/${botUsername}?startgroup=true` }]
+          [{ text: "➕ Add me to your group", url: `https://t.me/${botUsername}?startgroup=true` }],
+          [{ text: "Start me 🎖️", url: `https://t.me/${botUsername}?start=start` }],
+          [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
       };
 
-      const msg = `${UI.BORDER_TOP}\n│ 👑 <b>WELCOME TO THE UNDERWORLD</b>\n${UI.BORDER_BOT}\n\nGreetings, ${firstName}!\nYour account is secured in the Cloud Vault.\nUse /profile to check your status.`;
+      const msg = `${UI.BORDER_TOP}\n│ 👑 <b>WELCOME TO THE UNDERWORLD</b>\n${UI.BORDER_BOT}\n\nGreetings, ${firstName}!\nYour account is secured in the Cloud Vault.`;
       
-      // Notice we are passing replyMarkup as the second argument now
-      await sendMessage(msg, replyMarkup);
+      await sendMessage(chatId, msg, replyMarkup);
       return;
     }
+
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
@@ -733,8 +768,86 @@ ${UI.BORDER_BOT}`;
     
     
     // ====================================================
+    
     // ====================================================
     
+  }
+
+     // ====================================================
+    // ====================================================
+   // ╭━━━━━━━━━━━━━━━✪
+   // │ 🕹️ CALLBACK ROUTER (BUTTON CLICKS)
+   // ╰━━━━━━━━━━━━━━━✪
+ // ====================================================
+// ====================================================
+  async processCallback(query: any, env: CloudflareEnv, editMessageText: any, answerCallbackQuery: any) {
+    const data = query.data;
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const userId = query.from.id;
+
+    await answerCallbackQuery(query.id); // Stops the loading spinner
+
+    if (data === "menu_start") {
+      const botUsername = "YOUR_BOT_USERNAME"; // <-- CHANGE THIS
+      const replyMarkup = {
+        inline_keyboard: [
+          [{ text: "➕ Add me to your group", url: `https://t.me/${botUsername}?startgroup=true` }],
+          [{ text: "Start me 🎖️", url: `https://t.me/${botUsername}?start=start` }],
+          [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
+        ]
+      };
+      await editMessageText(chatId, messageId, "👑 <b>WELCOME TO THE UNDERWORLD</b>\nChoose an option:", replyMarkup);
+    }
+
+    else if (data === "menu_settings") {
+      const replyMarkup = {
+        inline_keyboard: [
+          [{ text: "👋 Welcome", callback_data: "menu_welcome" }, { text: "My friend 🤫", url: "tg://settings" }],
+          [{ text: "Soon ⏳", callback_data: "alert_soon" }, { text: "Soon ⏳", callback_data: "alert_soon" }],
+          [{ text: "🔙 Back", callback_data: "menu_start" }]
+        ]
+      };
+      await editMessageText(chatId, messageId, "⚙️ <b>SETTINGS MENU</b>\nConfigure your Underworld experience:", replyMarkup);
+    }
+
+    else if (data === "menu_welcome") {
+      const replyMarkup = {
+        inline_keyboard: [
+          [{ text: "🟢 On", callback_data: "wel_on" }, { text: "🔴 Off", callback_data: "wel_off" }],
+          [{ text: "📝 Set", callback_data: "wel_set" }, { text: "👁️ See", callback_data: "wel_see" }],
+          [{ text: "🔙 Back", callback_data: "menu_settings" }]
+        ]
+      };
+      await editMessageText(chatId, messageId, "👋 <b>WELCOME SETTINGS</b>\nConfigure how new members are greeted:", replyMarkup);
+    }
+
+    else if (data === "alert_soon") {
+      await answerCallbackQuery(query.id, "⏳ Feature coming soon!", true);
+    }
+
+    else if (data === "wel_on") {
+      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1);
+      await answerCallbackQuery(query.id, "✅ Welcome messages turned ON", true);
+    }
+    else if (data === "wel_off") {
+      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0);
+      await answerCallbackQuery(query.id, "🔴 Welcome messages turned OFF", true);
+    }
+    else if (data === "wel_set") {
+      const expiresAt = Math.floor(Date.now() / 1000) + 1800; // 30 mins
+      await DB_MANAGER.setSession(env.DB, userId, chatId, 'awaiting_text', expiresAt);
+      
+      const replyMarkup = { inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "menu_welcome" }]] };
+      await editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n\n<i>You have 30 minutes.</i>", replyMarkup);
+    }
+    else if (data === "wel_see") {
+      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+      let preview = settings && settings.welcome_text ? settings.welcome_text : "<i>No custom welcome text set. Default will be used.</i>";
+      let mediaStatus = settings && settings.welcome_media_id && settings.welcome_media_id !== 'none' ? "✅ Media Attached" : "❌ No Media";
+      
+      await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\nMedia: ${mediaStatus}`, true);
+    }
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE

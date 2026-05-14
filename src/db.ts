@@ -16,6 +16,51 @@ export const DB_MANAGER = {
     ).bind(userId).run();
   },
 
+  // 1.5. Database Upgrades for Settings & Sessions
+  async initSettings(db: D1Database): Promise<void> {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS group_settings (
+        chat_id INTEGER PRIMARY KEY,
+        welcome_enabled INTEGER DEFAULT 0,
+        welcome_text TEXT DEFAULT '',
+        welcome_media_id TEXT DEFAULT ''
+      )
+    `).run();
+    
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS setup_sessions (
+        user_id INTEGER PRIMARY KEY,
+        chat_id INTEGER,
+        step TEXT,
+        expires_at INTEGER
+      )
+    `).run();
+  },
+
+  // Session State Machine Helpers
+  async setSession(db: D1Database, userId: number, chatId: number, step: string, expiresAt: number): Promise<void> {
+    await db.prepare("INSERT INTO setup_sessions (user_id, chat_id, step, expires_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET step=?, expires_at=?")
+      .bind(userId, chatId, step, expiresAt, step, expiresAt).run();
+  },
+  async getSession(db: D1Database, userId: number): Promise<any> {
+    const { results } = await db.prepare("SELECT * FROM setup_sessions WHERE user_id = ?").bind(userId).all();
+    return results.length > 0 ? results[0] : null;
+  },
+  async clearSession(db: D1Database, userId: number): Promise<void> {
+    await db.prepare("DELETE FROM setup_sessions WHERE user_id = ?").bind(userId).run();
+  },
+
+  // Group Settings Helpers
+  async getGroupSettings(db: D1Database, chatId: number): Promise<any> {
+    const { results } = await db.prepare("SELECT * FROM group_settings WHERE chat_id = ?").bind(chatId).all();
+    return results.length > 0 ? results[0] : null;
+  },
+  async updateGroupSetting(db: D1Database, chatId: number, column: string, value: any): Promise<void> {
+    // Upsert logic for settings
+    await db.prepare("INSERT OR IGNORE INTO group_settings (chat_id) VALUES (?)").bind(chatId).run();
+    await db.prepare(`UPDATE group_settings SET ${column} = ? WHERE chat_id = ?`).bind(value, chatId).run();
+  },
+
    // ====================================================
   // 2. User ka pura data nikalna
   async getUser(db: D1Database, userId: number): Promise<UserData | null> {
