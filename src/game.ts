@@ -32,22 +32,25 @@ export const GAME = {
         return;
       }
       if (session.step === 'awaiting_media') {
-        let fileId = "";
-        if (message.photo) fileId = message.photo[message.photo.length - 1].file_id;
-        else if (message.video) fileId = message.video.file_id;
-        else if (message.sticker) fileId = message.sticker.file_id;
-        else if (message.text && message.text.toLowerCase() === 'skip') fileId = "none";
+        let fileData = "";
+        // Save the media type AND the cloud file_id
+        if (message.photo) fileData = "photo:" + message.photo[message.photo.length - 1].file_id;
+        else if (message.video) fileData = "video:" + message.video.file_id;
+        else if (message.animation) fileData = "animation:" + message.animation.file_id;
+        else if (message.sticker) fileData = "sticker:" + message.sticker.file_id;
+        else if (message.text && message.text.toLowerCase() === 'skip') fileData = "none";
 
-        if (fileId) {
-          await DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileId);
+        if (fileData) {
+          await DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileData);
           await DB_MANAGER.clearSession(env.DB, userId);
           await sendMessage(chatId, "🎉 <b>Welcome Setup Complete!</b>\nUse the 'See' button in settings to test it.");
           return;
         } else {
-          await sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, Sticker, or type 'skip'.");
+          await sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, GIF, Sticker, or type 'skip'.");
           return;
         }
       }
+
     } else if (session && session.expires_at <= currentTime) {
        await DB_MANAGER.clearSession(env.DB, userId); // Cleanup expired session
     }
@@ -827,12 +830,14 @@ ${UI.BORDER_BOT}`;
       await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0);
       await answerCallbackQuery(query.id, "🔴 Welcome messages turned OFF", true);
     }
-    else if (data === "wel_set") {
-      const expiresAt = Math.floor(Date.now() / 1000) + 1800; // 30 mins
-      await DB_MANAGER.setSession(env.DB, userId, chatId, 'awaiting_text', expiresAt);
-      
-      const replyMarkup = { inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "menu_welcome" }]] };
-      await editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n\n<i>You have 30 minutes.</i>", replyMarkup);
+        else if (data === "wel_see") {
+      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+      let preview = settings && settings.welcome_text ? settings.welcome_text : "No custom welcome text set.";
+      let mediaStatus = "❌ No Media";
+      if (settings && settings.welcome_media_id && settings.welcome_media_id.includes(':')) {
+        mediaStatus = "✅ Media: " + settings.welcome_media_id.split(':')[0].toUpperCase();
+      }
+      await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\n${mediaStatus}`, true);
     }
     else if (data === "wel_see") {
       const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
@@ -841,6 +846,66 @@ ${UI.BORDER_BOT}`;
       
       await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\nMedia: ${mediaStatus}`, true);
     }
-  }
+  }, // <--- Make sure this comma is here after processCallback!
+
+  // ╭━━━━━━━━━━━━━━━✪
+  // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
+  // ╰━━━━━━━━━━━━━━━✪
+  async processNewMember(update: any, env: CloudflareEnv) {
+    const message = update.message;
+    const chatId = message.chat.id;
+    const newMembers = message.new_chat_members;
+
+    // Check if the group has Welcomes turned ON
+    const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
+    if (!settings || settings.welcome_enabled !== 1) return;
+
+    let textTemplate = settings.welcome_text || "Welcome to the Underworld, {name}!";
+    const mediaData = settings.welcome_media_id; 
+
+    for (const member of newMembers) {
+      if (member.is_bot) continue; // Don't welcome other bots
+
+      const name = member.first_name || "Agent";
+      // Auto-replace {name} and {id} with the real user's details
+      let finalMsg = textTemplate.replace(/{name}/g, name).replace(/{id}/g, member.id.toString());
+
+      // No media? Just send text.
+      if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+        });
+      } 
+      // Has Media? Send media with the text as a caption!
+      else {
+        const [mediaType, fileId] = mediaData.split(':');
+        let endpoint = "";
+        let payload: any = { chat_id: chatId, parse_mode: "HTML" };
+
+        if (mediaType === "photo") { endpoint = "sendPhoto"; payload.photo = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "video") { endpoint = "sendVideo"; payload.video = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "animation") { endpoint = "sendAnimation"; payload.animation = fileId; payload.caption = finalMsg; }
+        else if (mediaType === "sticker") { 
+          // Stickers can't have captions. Send sticker, then send the text message separately.
+          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendSticker`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, sticker: fileId })
+          });
+          endpoint = "sendMessage"; 
+          payload.text = finalMsg;
+        }
+
+        if (endpoint) {
+          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/${endpoint}`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+        }
+      }
+    }
+
+  
+  
 }; // <--- PROPERLY CLOSES THE 'GAME' OBJECT
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE

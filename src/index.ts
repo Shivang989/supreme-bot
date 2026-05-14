@@ -47,11 +47,18 @@ export default {
           return new Response("OK", { status: 200 });
         }
 
-        // ROUTE 2: NORMAL MESSAGES & MEDIA
+        // ROUTE 2: NEW MEMBERS JOINING (THE TRIGGER)
+        if (update.message && update.message.new_chat_members) {
+          ctx.waitUntil(GAME.processNewMember(update, env));
+          return new Response("OK", { status: 200 });
+        }
+
+        // ROUTE 3: NORMAL MESSAGES & MEDIA
         if (update.message) {
           // Pass the entire update to GAME so it can intercept text OR media
           ctx.waitUntil(GAME.processCommand(update, env, sendMessage, startTime));
         }
+
         
         return new Response("OK", { status: 200 });
       } catch (error) {

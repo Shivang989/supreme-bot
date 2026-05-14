@@ -101,7 +101,12 @@ exports.default = {
                             ctx.waitUntil(game_1.GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
                             return [2 /*return*/, new Response("OK", { status: 200 })];
                         }
-                        // ROUTE 2: NORMAL MESSAGES & MEDIA
+                        // ROUTE 2: NEW MEMBERS JOINING (THE TRIGGER)
+                        if (update.message && update.message.new_chat_members) {
+                            ctx.waitUntil(game_1.GAME.processNewMember(update, env));
+                            return [2 /*return*/, new Response("OK", { status: 200 })];
+                        }
+                        // ROUTE 3: NORMAL MESSAGES & MEDIA
                         if (update.message) {
                             // Pass the entire update to GAME so it can intercept text OR media
                             ctx.waitUntil(game_1.GAME.processCommand(update, env, sendMessage, startTime));

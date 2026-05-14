@@ -50,7 +50,7 @@ exports.GAME = {
     processCommand: function (update, env, sendMessage, startTime) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var message, chatId, userId, firstName, session, currentTime, fileId, text, args, botUsername, replyMarkup, msg, user, status, profileText, currentTime_1, marketText, _i, _f, _g, itemKey, data, currentPrice, investment, user, result, netChange, newBalance, investText, invItems, invText, _h, invItems_1, row, itemData, emoji, nameDisplay, user, reviveCost, newBalance, msg, targetId, targetName, caller, target, currentSeconds, roll, STANDARD_DROPS, dropItem, itemDisplay, dropEmoji, targetId, targetName, robber, target, currentSeconds, roll, stealPercent, stolenAmount, fineAmount, itemToSell_1, itemData, invItems, userItem, user, currentTime_2, sellPrice, topPlayers, lbText, rank, _j, topPlayers_1, p, medal, user, playerLevel, hit, bossDefense, raidText, reward, idText, replyId, replyName, latency, targetId, targetName, user, amount, targetId, targetName, target, newBalance, action, symbol, amount, targetId, targetName, sender, target, user, currentSeconds, remaining, plan, cost, days, newProtectionTime, e_1, adminData, isOwner, isHighAdmin, targetId, level, idArg, lvlArg, targetId, idArg, targetId, titleName, idArg, e_2, allAdmins, list, _k, allAdmins_1, a;
+            var message, chatId, userId, firstName, session, currentTime, fileData, text, args, botUsername, replyMarkup, msg, user, status, profileText, currentTime_1, marketText, _i, _f, _g, itemKey, data, currentPrice, investment, user, result, netChange, newBalance, investText, invItems, invText, _h, invItems_1, row, itemData, emoji, nameDisplay, user, reviveCost, newBalance, msg, targetId, targetName, caller, target, currentSeconds, roll, STANDARD_DROPS, dropItem, itemDisplay, dropEmoji, targetId, targetName, robber, target, currentSeconds, roll, stealPercent, stolenAmount, fineAmount, itemToSell_1, itemData, invItems, userItem, user, currentTime_2, sellPrice, topPlayers, lbText, rank, _j, topPlayers_1, p, medal, user, playerLevel, hit, bossDefense, raidText, reward, idText, replyId, replyName, latency, targetId, targetName, user, amount, targetId, targetName, target, newBalance, action, symbol, amount, targetId, targetName, sender, target, user, currentSeconds, remaining, plan, cost, days, newProtectionTime, e_1, adminData, isOwner, isHighAdmin, targetId, level, idArg, lvlArg, targetId, idArg, targetId, titleName, idArg, e_2, allAdmins, list, _k, allAdmins_1, a;
             return __generator(this, function (_l) {
                 switch (_l.label) {
                     case 0:
@@ -76,17 +76,20 @@ exports.GAME = {
                         return [2 /*return*/];
                     case 5:
                         if (!(session.step === 'awaiting_media')) return [3 /*break*/, 11];
-                        fileId = "";
+                        fileData = "";
+                        // Save the media type AND the cloud file_id
                         if (message.photo)
-                            fileId = message.photo[message.photo.length - 1].file_id;
+                            fileData = "photo:" + message.photo[message.photo.length - 1].file_id;
                         else if (message.video)
-                            fileId = message.video.file_id;
+                            fileData = "video:" + message.video.file_id;
+                        else if (message.animation)
+                            fileData = "animation:" + message.animation.file_id;
                         else if (message.sticker)
-                            fileId = message.sticker.file_id;
+                            fileData = "sticker:" + message.sticker.file_id;
                         else if (message.text && message.text.toLowerCase() === 'skip')
-                            fileId = "none";
-                        if (!fileId) return [3 /*break*/, 9];
-                        return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileId)];
+                            fileData = "none";
+                        if (!fileData) return [3 /*break*/, 9];
+                        return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileData)];
                     case 6:
                         _l.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.clearSession(env.DB, userId)];
@@ -96,7 +99,7 @@ exports.GAME = {
                     case 8:
                         _l.sent();
                         return [2 /*return*/];
-                    case 9: return [4 /*yield*/, sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, Sticker, or type 'skip'.")];
+                    case 9: return [4 /*yield*/, sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, GIF, Sticker, or type 'skip'.")];
                     case 10:
                         _l.sent();
                         return [2 /*return*/];
@@ -858,7 +861,7 @@ exports.GAME = {
     // ╰━━━━━━━━━━━━━━━✪
     processCallback: function (query, env, editMessageText, answerCallbackQuery) {
         return __awaiter(this, void 0, void 0, function () {
-            var data, chatId, messageId, userId, botUsername, replyMarkup, replyMarkup, replyMarkup, expiresAt, replyMarkup, settings, preview, mediaStatus;
+            var data, chatId, messageId, userId, botUsername, replyMarkup, replyMarkup, replyMarkup, settings, preview, mediaStatus, settings, preview, mediaStatus;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -933,13 +936,16 @@ exports.GAME = {
                         _a.sent();
                         return [3 /*break*/, 21];
                     case 15:
-                        if (!(data === "wel_set")) return [3 /*break*/, 18];
-                        expiresAt = Math.floor(Date.now() / 1000) + 1800;
-                        return [4 /*yield*/, db_1.DB_MANAGER.setSession(env.DB, userId, chatId, 'awaiting_text', expiresAt)];
+                        if (!(data === "wel_see")) return [3 /*break*/, 18];
+                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
                     case 16:
-                        _a.sent();
-                        replyMarkup = { inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "menu_welcome" }]] };
-                        return [4 /*yield*/, editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n\n<i>You have 30 minutes.</i>", replyMarkup)];
+                        settings = _a.sent();
+                        preview = settings && settings.welcome_text ? settings.welcome_text : "No custom welcome text set.";
+                        mediaStatus = "❌ No Media";
+                        if (settings && settings.welcome_media_id && settings.welcome_media_id.includes(':')) {
+                            mediaStatus = "✅ Media: " + settings.welcome_media_id.split(':')[0].toUpperCase();
+                        }
+                        return [4 /*yield*/, answerCallbackQuery(query.id, "PREVIEW:\n".concat(preview, "\n\n").concat(mediaStatus), true)];
                     case 17:
                         _a.sent();
                         return [3 /*break*/, 21];
@@ -955,6 +961,93 @@ exports.GAME = {
                         _a.sent();
                         _a.label = 21;
                     case 21: return [2 /*return*/];
+                }
+            });
+        });
+    },
+    // ╭━━━━━━━━━━━━━━━✪
+    // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
+    // ╰━━━━━━━━━━━━━━━✪
+    processNewMember: function (update, env) {
+        return __awaiter(this, void 0, void 0, function () {
+            var message, chatId, newMembers, settings, textTemplate, mediaData, _i, newMembers_1, member, name, finalMsg, _a, mediaType, fileId, endpoint, payload;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        message = update.message;
+                        chatId = message.chat.id;
+                        newMembers = message.new_chat_members;
+                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
+                    case 1:
+                        settings = _b.sent();
+                        if (!settings || settings.welcome_enabled !== 1)
+                            return [2 /*return*/];
+                        textTemplate = settings.welcome_text || "Welcome to the Underworld, {name}!";
+                        mediaData = settings.welcome_media_id;
+                        _i = 0, newMembers_1 = newMembers;
+                        _b.label = 2;
+                    case 2:
+                        if (!(_i < newMembers_1.length)) return [3 /*break*/, 12];
+                        member = newMembers_1[_i];
+                        if (member.is_bot)
+                            return [3 /*break*/, 11]; // Don't welcome other bots
+                        name = member.first_name || "Agent";
+                        finalMsg = textTemplate.replace(/{name}/g, name).replace(/{id}/g, member.id.toString());
+                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 4];
+                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+                            })];
+                    case 3:
+                        _b.sent();
+                        return [3 /*break*/, 11];
+                    case 4:
+                        _a = mediaData.split(':'), mediaType = _a[0], fileId = _a[1];
+                        endpoint = "";
+                        payload = { chat_id: chatId, parse_mode: "HTML" };
+                        if (!(mediaType === "photo")) return [3 /*break*/, 5];
+                        endpoint = "sendPhoto";
+                        payload.photo = fileId;
+                        payload.caption = finalMsg;
+                        return [3 /*break*/, 9];
+                    case 5:
+                        if (!(mediaType === "video")) return [3 /*break*/, 6];
+                        endpoint = "sendVideo";
+                        payload.video = fileId;
+                        payload.caption = finalMsg;
+                        return [3 /*break*/, 9];
+                    case 6:
+                        if (!(mediaType === "animation")) return [3 /*break*/, 7];
+                        endpoint = "sendAnimation";
+                        payload.animation = fileId;
+                        payload.caption = finalMsg;
+                        return [3 /*break*/, 9];
+                    case 7:
+                        if (!(mediaType === "sticker")) return [3 /*break*/, 9];
+                        // Stickers can't have captions. Send sticker, then send the text message separately.
+                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendSticker"), {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ chat_id: chatId, sticker: fileId })
+                            })];
+                    case 8:
+                        // Stickers can't have captions. Send sticker, then send the text message separately.
+                        _b.sent();
+                        endpoint = "sendMessage";
+                        payload.text = finalMsg;
+                        _b.label = 9;
+                    case 9:
+                        if (!endpoint) return [3 /*break*/, 11];
+                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/").concat(endpoint), {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(payload)
+                            })];
+                    case 10:
+                        _b.sent();
+                        _b.label = 11;
+                    case 11:
+                        _i++;
+                        return [3 /*break*/, 2];
+                    case 12: return [2 /*return*/];
                 }
             });
         });
