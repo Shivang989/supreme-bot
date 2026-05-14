@@ -41,7 +41,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME = void 0;
+exports.processNewMember = exports.async = exports.GAME = void 0;
 var db_1 = require("./db");
 var muscle_1 = require("./muscle");
 var config_1 = require("./config");
@@ -964,93 +964,68 @@ exports.GAME = {
                 }
             });
         });
-    },
-    // ╭━━━━━━━━━━━━━━━✪
-    // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
-    // ╰━━━━━━━━━━━━━━━✪
-    processNewMember: function (update, env) {
-        return __awaiter(this, void 0, void 0, function () {
-            var message, chatId, newMembers, settings, textTemplate, mediaData, _i, newMembers_1, member, name, finalMsg, _a, mediaType, fileId, endpoint, payload;
-            return __generator(this, function (_b) {
-                switch (_b.label) {
-                    case 0:
-                        message = update.message;
-                        chatId = message.chat.id;
-                        newMembers = message.new_chat_members;
-                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
-                    case 1:
-                        settings = _b.sent();
-                        if (!settings || settings.welcome_enabled !== 1)
-                            return [2 /*return*/];
-                        textTemplate = settings.welcome_text || "Welcome to the Underworld, {name}!";
-                        mediaData = settings.welcome_media_id;
-                        _i = 0, newMembers_1 = newMembers;
-                        _b.label = 2;
-                    case 2:
-                        if (!(_i < newMembers_1.length)) return [3 /*break*/, 12];
-                        member = newMembers_1[_i];
-                        if (member.is_bot)
-                            return [3 /*break*/, 11]; // Don't welcome other bots
-                        name = member.first_name || "Agent";
-                        finalMsg = textTemplate.replace(/{name}/g, name).replace(/{id}/g, member.id.toString());
-                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 4];
-                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
-                            })];
-                    case 3:
-                        _b.sent();
-                        return [3 /*break*/, 11];
-                    case 4:
-                        _a = mediaData.split(':'), mediaType = _a[0], fileId = _a[1];
-                        endpoint = "";
-                        payload = { chat_id: chatId, parse_mode: "HTML" };
-                        if (!(mediaType === "photo")) return [3 /*break*/, 5];
-                        endpoint = "sendPhoto";
-                        payload.photo = fileId;
-                        payload.caption = finalMsg;
-                        return [3 /*break*/, 9];
-                    case 5:
-                        if (!(mediaType === "video")) return [3 /*break*/, 6];
-                        endpoint = "sendVideo";
-                        payload.video = fileId;
-                        payload.caption = finalMsg;
-                        return [3 /*break*/, 9];
-                    case 6:
-                        if (!(mediaType === "animation")) return [3 /*break*/, 7];
-                        endpoint = "sendAnimation";
-                        payload.animation = fileId;
-                        payload.caption = finalMsg;
-                        return [3 /*break*/, 9];
-                    case 7:
-                        if (!(mediaType === "sticker")) return [3 /*break*/, 9];
-                        // Stickers can't have captions. Send sticker, then send the text message separately.
-                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendSticker"), {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ chat_id: chatId, sticker: fileId })
-                            })];
-                    case 8:
-                        // Stickers can't have captions. Send sticker, then send the text message separately.
-                        _b.sent();
-                        endpoint = "sendMessage";
-                        payload.text = finalMsg;
-                        _b.label = 9;
-                    case 9:
-                        if (!endpoint) return [3 /*break*/, 11];
-                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/").concat(endpoint), {
-                                method: "POST", headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify(payload)
-                            })];
-                    case 10:
-                        _b.sent();
-                        _b.label = 11;
-                    case 11:
-                        _i++;
-                        return [3 /*break*/, 2];
-                    case 12: return [2 /*return*/];
-                }
-            });
-        });
     }
-}; // <--- PROPERLY CLOSES THE 'GAME' OBJECT
+};
+(function (update, env) {
+    var message = update.message;
+    var chatId = message.chat.id;
+    var newMembers = message.new_chat_members;
+    // Check if the group has Welcomes turned ON
+    var settings = yield db_1.DB_MANAGER.getGroupSettings(env.DB, chatId);
+    if (!settings || settings.welcome_enabled !== 1)
+        return;
+    var textTemplate = settings.welcome_text || "Welcome to the Underworld, {name}!";
+    var mediaData = settings.welcome_media_id;
+    for (var _i = 0, newMembers_1 = newMembers; _i < newMembers_1.length; _i++) {
+        var member = newMembers_1[_i];
+        if (member.is_bot)
+            continue; // Don't welcome other bots
+        var name = member.first_name || "Agent";
+        // Auto-replace {name} and {id} with the real user's details
+        var finalMsg = textTemplate.replace(/{name}/g, name).replace(/{id}/g, member.id.toString());
+        // No media? Just send text.
+        if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
+            yield fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+            });
+        }
+        // Has Media? Send media with the text as a caption!
+        else {
+            var _a = mediaData.split(':'), mediaType = _a[0], fileId = _a[1];
+            var endpoint = "";
+            var payload = { chat_id: chatId, parse_mode: "HTML" };
+            if (mediaType === "photo") {
+                endpoint = "sendPhoto";
+                payload.photo = fileId;
+                payload.caption = finalMsg;
+            }
+            else if (mediaType === "video") {
+                endpoint = "sendVideo";
+                payload.video = fileId;
+                payload.caption = finalMsg;
+            }
+            else if (mediaType === "animation") {
+                endpoint = "sendAnimation";
+                payload.animation = fileId;
+                payload.caption = finalMsg;
+            }
+            else if (mediaType === "sticker") {
+                // Stickers can't have captions. Send sticker, then send the text message separately.
+                yield fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendSticker"), {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ chat_id: chatId, sticker: fileId })
+                });
+                endpoint = "sendMessage";
+                payload.text = finalMsg;
+            }
+            if (endpoint) {
+                yield fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/").concat(endpoint), {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+            }
+        }
+    }
+}); // <--- PROPERLY CLOSES THE 'GAME' OBJECT
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE

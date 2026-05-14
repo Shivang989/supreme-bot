@@ -846,7 +846,9 @@ ${UI.BORDER_BOT}`;
       
       await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\nMedia: ${mediaStatus}`, true);
     }
-  }, // <--- Make sure this comma is here after processCallback!
+  }
+  
+}, // <--- Make sure this comma is here after processCallback!
 
   // ╭━━━━━━━━━━━━━━━✪
   // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
