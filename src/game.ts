@@ -826,29 +826,16 @@ ${UI.BORDER_BOT}`;
       await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1);
       await answerCallbackQuery(query.id, "✅ Welcome messages turned ON", true);
     }
-    else if (data === "wel_off") {
-      await DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0);
-      await answerCallbackQuery(query.id, "🔴 Welcome messages turned OFF", true);
-    }
-        else if (data === "wel_see") {
+       else if (data === "wel_see") {
       const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
-      let preview = settings && settings.welcome_text ? settings.welcome_text : "No custom welcome text set.";
+      let preview = settings && settings.welcome_text ? settings.welcome_text : "<i>No custom welcome text set. Default will be used.</i>";
       let mediaStatus = "❌ No Media";
-      if (settings && settings.welcome_media_id && settings.welcome_media_id.includes(':')) {
+      if (settings && settings.welcome_media_id && settings.welcome_media_id !== 'none' && settings.welcome_media_id.includes(':')) {
         mediaStatus = "✅ Media: " + settings.welcome_media_id.split(':')[0].toUpperCase();
       }
       await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\n${mediaStatus}`, true);
     }
-    else if (data === "wel_see") {
-      const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
-      let preview = settings && settings.welcome_text ? settings.welcome_text : "<i>No custom welcome text set. Default will be used.</i>";
-      let mediaStatus = settings && settings.welcome_media_id && settings.welcome_media_id !== 'none' ? "✅ Media Attached" : "❌ No Media";
-      
-      await answerCallbackQuery(query.id, `PREVIEW:\n${preview}\n\nMedia: ${mediaStatus}`, true);
-    }
-  }
-  
-}, // <--- Make sure this comma is here after processCallback!
+  }, // <--- ⚠️ THIS COMMA IS WHAT FIXES THE CRASH ⚠️
 
   // ╭━━━━━━━━━━━━━━━✪
   // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
@@ -906,8 +893,6 @@ ${UI.BORDER_BOT}`;
         }
       }
     }
-
-  
-  
-}; // <--- PROPERLY CLOSES THE 'GAME' OBJECT
+  } // <-- Closes processNewMember
+}; // <-- Closes the GAME object
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
