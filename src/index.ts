@@ -1,8 +1,12 @@
 // ╭━━━━━━━━━━━━━━━✪
 // │ 🧠 THE MANAGER (INDEX / ROUTER)
-// ╰━━━━━━━━━━━━━━━✪  
+// ╰━━━━━━━━━━━━━━━✪
+import { GAME } from './game';
+import { CONFIG } from './config';
+import { CloudflareEnv } from './types';
 
-async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promise<Response> {
+export default {
+  async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "POST") {
       try {
         const update: any = await request.json();
@@ -57,5 +61,5 @@ async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promis
     }
     return new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 });
   }
-
+};
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END

@@ -1,6 +1,4 @@
-// ╭━━━━━━━━━━━━━━━✪
-// │ 🧠 THE MANAGER (INDEX / ROUTER)
-// ╰━━━━━━━━━━━━━━━✪  
+"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -37,71 +35,86 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-async;
-fetch(request, Request, env, CloudflareEnv, ctx, ExecutionContext);
-Promise < Response > {
-    if: function (request) { },
-    : .method === "POST"
+Object.defineProperty(exports, "__esModule", { value: true });
+// ╭━━━━━━━━━━━━━━━✪
+// │ 🧠 THE MANAGER (INDEX / ROUTER)
+// ╰━━━━━━━━━━━━━━━✪
+var game_1 = require("./game");
+var config_1 = require("./config");
+exports.default = {
+    fetch: function (request, env, ctx) {
+        return __awaiter(this, void 0, Promise, function () {
+            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, error_1;
+            var _this = this;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!(request.method === "POST")) return [3 /*break*/, 5];
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, request.json()];
+                    case 2:
+                        update = _a.sent();
+                        startTime = Date.now();
+                        // Ensure new DB tables exist
+                        return [4 /*yield*/, Promise.resolve().then(function () { return require('./db'); }).then(function (m) { return m.DB_MANAGER.initSettings(env.DB); })];
+                    case 3:
+                        // Ensure new DB tables exist
+                        _a.sent();
+                        sendMessage = function (chatId, msg, reply_markup) { return __awaiter(_this, void 0, void 0, function () {
+                            var payload;
+                            return __generator(this, function (_a) {
+                                payload = { chat_id: chatId, text: msg, parse_mode: "HTML" };
+                                if (reply_markup)
+                                    payload.reply_markup = reply_markup;
+                                return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
+                                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+                                    })];
+                            });
+                        }); };
+                        editMessageText = function (chatId, messageId, text, reply_markup) { return __awaiter(_this, void 0, void 0, function () {
+                            var payload;
+                            return __generator(this, function (_a) {
+                                payload = { chat_id: chatId, message_id: messageId, text: text, parse_mode: "HTML" };
+                                if (reply_markup)
+                                    payload.reply_markup = reply_markup;
+                                return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/editMessageText"), {
+                                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+                                    })];
+                            });
+                        }); };
+                        answerCallbackQuery = function (callbackQueryId, text, showAlert) {
+                            if (text === void 0) { text = ""; }
+                            if (showAlert === void 0) { showAlert = false; }
+                            return __awaiter(_this, void 0, void 0, function () {
+                                return __generator(this, function (_a) {
+                                    return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/answerCallbackQuery"), {
+                                            method: "POST", headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ callback_query_id: callbackQueryId, text: text, show_alert: showAlert })
+                                        })];
+                                });
+                            });
+                        };
+                        // ROUTE 1: BUTTON CLICKS (CALLBACKS)
+                        if (update.callback_query) {
+                            ctx.waitUntil(game_1.GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
+                            return [2 /*return*/, new Response("OK", { status: 200 })];
+                        }
+                        // ROUTE 2: NORMAL MESSAGES & MEDIA
+                        if (update.message) {
+                            // Pass the entire update to GAME so it can intercept text OR media
+                            ctx.waitUntil(game_1.GAME.processCommand(update, env, sendMessage, startTime));
+                        }
+                        return [2 /*return*/, new Response("OK", { status: 200 })];
+                    case 4:
+                        error_1 = _a.sent();
+                        console.error("Critical Router Error:", error_1);
+                        return [2 /*return*/, new Response("OK", { status: 200 })]; // Always return OK to Telegram so it doesn't retry
+                    case 5: return [2 /*return*/, new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 })];
+                }
+            });
+        });
+    }
 };
-{
-    try {
-        var update = await request.json();
-        var startTime = Date.now();
-        // Ensure new DB tables exist
-        await Promise.resolve().then(function () { return require('./db'); }).then(function (m) { return m.DB_MANAGER.initSettings(env.DB); });
-        // UTILITY: Send Message
-        var sendMessage = function (chatId, msg, reply_markup) { return __awaiter(void 0, void 0, void 0, function () {
-            var payload;
-            return __generator(this, function (_a) {
-                payload = { chat_id: chatId, text: msg, parse_mode: "HTML" };
-                if (reply_markup)
-                    payload.reply_markup = reply_markup;
-                return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(CONFIG.BOT_TOKEN, "/sendMessage"), {
-                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-                    })];
-            });
-        }); };
-        // UTILITY: Edit Button Message
-        var editMessageText = function (chatId, messageId, text, reply_markup) { return __awaiter(void 0, void 0, void 0, function () {
-            var payload;
-            return __generator(this, function (_a) {
-                payload = { chat_id: chatId, message_id: messageId, text: text, parse_mode: "HTML" };
-                if (reply_markup)
-                    payload.reply_markup = reply_markup;
-                return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(CONFIG.BOT_TOKEN, "/editMessageText"), {
-                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
-                    })];
-            });
-        }); };
-        // UTILITY: Stop Button Loading Spinner
-        var answerCallbackQuery = function (callbackQueryId, text, showAlert) {
-            if (text === void 0) { text = ""; }
-            if (showAlert === void 0) { showAlert = false; }
-            return __awaiter(void 0, void 0, void 0, function () {
-                return __generator(this, function (_a) {
-                    return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(CONFIG.BOT_TOKEN, "/answerCallbackQuery"), {
-                            method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ callback_query_id: callbackQueryId, text: text, show_alert: showAlert })
-                        })];
-                });
-            });
-        };
-        // ROUTE 1: BUTTON CLICKS (CALLBACKS)
-        if (update.callback_query) {
-            ctx.waitUntil(GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
-            return new Response("OK", { status: 200 });
-        }
-        // ROUTE 2: NORMAL MESSAGES & MEDIA
-        if (update.message) {
-            // Pass the entire update to GAME so it can intercept text OR media
-            ctx.waitUntil(GAME.processCommand(update, env, sendMessage, startTime));
-        }
-        return new Response("OK", { status: 200 });
-    }
-    catch (error) {
-        console.error("Critical Router Error:", error);
-        return new Response("OK", { status: 200 }); // Always return OK to Telegram so it doesn't retry
-    }
-}
-return new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 });
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
