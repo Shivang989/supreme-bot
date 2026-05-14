@@ -860,42 +860,32 @@ ${UI.BORDER_BOT}`;
     }
 
     else if (data === "wel_see") {
+      await answerCallbackQuery(query.id); // Stop the loading spinner
+      
       const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
-      if (!settings || !settings.welcome_text) {
-        await answerCallbackQuery(query.id, "❌ Nothing to see! Please 'Set' a welcome message first.", true);
-        return;
-      }
+      let textTemplate = (settings && settings.welcome_text) ? settings.welcome_text : "Welcome to the Underworld, {name}!";
+      const mediaData = settings ? settings.welcome_media_id : null;
       
-      await answerCallbackQuery(query.id); // Stop loading spinner
-      
-      let textTemplate = settings.welcome_text;
-      const mediaData = settings.welcome_media_id; 
-      let finalMsg = textTemplate.replace(/{name}/g, user.first_name).replace(/{id}/g, user.id.toString());
-      finalMsg = "👁️ <b>PREVIEW MODE:</b>\n\n" + finalMsg;
+      // Replace placeholders with the Admin's name so they can see how it looks
+      let finalMsg = "👁️ <b>[WELCOME PREVIEW]</b>\n\n" + textTemplate.replace(/{name}/g, query.from.first_name).replace(/{id}/g, userId.toString());
 
-      const backMarkup = { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "menu_welcome" }]] };
-
-      // No Media? Just edit the text.
+      // No media? Just send text preview.
       if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
-        await editMessageText(chatId, messageId, finalMsg, backMarkup);
-      } 
-      // Has Media? We must send a new message with the image/video.
-      else {
-        // Delete old menu message so it doesn't clutter the chat
-        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
         });
-        
+      } 
+      // Has Media? Send the actual media with the text as a caption!
+      else {
         const [mediaType, fileId] = mediaData.split(':');
         let endpoint = "";
-        let payload: any = { chat_id: chatId, parse_mode: "HTML", reply_markup: backMarkup };
+        let payload: any = { chat_id: chatId, parse_mode: "HTML" };
 
         if (mediaType === "photo") { endpoint = "sendPhoto"; payload.photo = fileId; payload.caption = finalMsg; }
         else if (mediaType === "video") { endpoint = "sendVideo"; payload.video = fileId; payload.caption = finalMsg; }
         else if (mediaType === "animation") { endpoint = "sendAnimation"; payload.animation = fileId; payload.caption = finalMsg; }
         else if (mediaType === "sticker") { 
-          // Stickers can't have captions. Send sticker, then send text with back button
           await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendSticker`, {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chat_id: chatId, sticker: fileId })

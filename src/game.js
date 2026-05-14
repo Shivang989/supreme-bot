@@ -861,7 +861,7 @@ exports.GAME = {
     // ╰━━━━━━━━━━━━━━━✪
     processCallback: function (query, env, editMessageText, answerCallbackQuery) {
         return __awaiter(this, void 0, void 0, function () {
-            var data, chatId, messageId, userId, botUsername, replyMarkup, replyMarkup, settings, isOn, statusText, replyMarkup, settings, backMarkup, settings, backMarkup, expiresAt, replyMarkup, settings, textTemplate, mediaData, finalMsg, backMarkup, _a, mediaType, fileId, endpoint, payload;
+            var data, chatId, messageId, userId, botUsername, replyMarkup, replyMarkup, settings, isOn, statusText, replyMarkup, settings, backMarkup, settings, backMarkup, expiresAt, replyMarkup, settings, textTemplate, mediaData, finalMsg, _a, mediaType, fileId, endpoint, payload;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -884,7 +884,7 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "👑 <b>WELCOME TO THE UNDERWORLD</b>\nChoose an option:", replyMarkup)];
                     case 2:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 3:
                         if (!(data === "menu_settings")) return [3 /*break*/, 5];
                         replyMarkup = {
@@ -897,7 +897,7 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "⚙️ <b>SETTINGS MENU</b>\nConfigure your Underworld experience:", replyMarkup)];
                     case 4:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 5:
                         if (!(data === "menu_welcome")) return [3 /*break*/, 9];
                         // Clear any pending setup session if user clicks Back/Cancel
@@ -920,13 +920,13 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "\uD83D\uDC4B <b>WELCOME SETTINGS</b>\n\nCurrent Status: <b>".concat(statusText, "</b>\nConfigure how new members are greeted:"), replyMarkup)];
                     case 8:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 9:
                         if (!(data === "alert_soon")) return [3 /*break*/, 11];
                         return [4 /*yield*/, answerCallbackQuery(query.id, "⏳ Feature coming soon!", true)];
                     case 10:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 11:
                         if (!(data === "wel_on")) return [3 /*break*/, 17];
                         return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
@@ -944,7 +944,7 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "✅ <b>Welcome Messages: ON</b>\n\nNew members will now be greeted automatically.", backMarkup)];
                     case 16:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 17:
                         if (!(data === "wel_off")) return [3 /*break*/, 23];
                         return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
@@ -962,7 +962,7 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "🔴 <b>Welcome Messages: OFF</b>\n\nGreetings are paused.", backMarkup)];
                     case 22:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 23:
                         if (!(data === "wel_set")) return [3 /*break*/, 26];
                         expiresAt = Math.floor(Date.now() / 1000) + 1800;
@@ -973,82 +973,68 @@ exports.GAME = {
                         return [4 /*yield*/, editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n<i>(You can use {name} and {id} in your text)</i>\n\n<i>You have 30 minutes.</i>", replyMarkup)];
                     case 25:
                         _b.sent();
-                        return [3 /*break*/, 40];
+                        return [3 /*break*/, 37];
                     case 26:
-                        if (!(data === "wel_see")) return [3 /*break*/, 40];
-                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
+                        if (!(data === "wel_see")) return [3 /*break*/, 37];
+                        return [4 /*yield*/, answerCallbackQuery(query.id)];
                     case 27:
-                        settings = _b.sent();
-                        if (!(!settings || !settings.welcome_text)) return [3 /*break*/, 29];
-                        return [4 /*yield*/, answerCallbackQuery(query.id, "❌ Nothing to see! Please 'Set' a welcome message first.", true)];
+                        _b.sent(); // Stop the loading spinner
+                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
                     case 28:
+                        settings = _b.sent();
+                        textTemplate = (settings && settings.welcome_text) ? settings.welcome_text : "Welcome to the Underworld, {name}!";
+                        mediaData = settings ? settings.welcome_media_id : null;
+                        finalMsg = "👁️ <b>[WELCOME PREVIEW]</b>\n\n" + textTemplate.replace(/{name}/g, query.from.first_name).replace(/{id}/g, userId.toString());
+                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 30];
+                        return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
+                                method: "POST", headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+                            })];
+                    case 29:
                         _b.sent();
-                        return [2 /*return*/];
-                    case 29: return [4 /*yield*/, answerCallbackQuery(query.id)];
+                        return [3 /*break*/, 37];
                     case 30:
-                        _b.sent(); // Stop loading spinner
-                        textTemplate = settings.welcome_text;
-                        mediaData = settings.welcome_media_id;
-                        finalMsg = textTemplate.replace(/{name}/g, user.first_name).replace(/{id}/g, user.id.toString());
-                        finalMsg = "👁️ <b>PREVIEW MODE:</b>\n\n" + finalMsg;
-                        backMarkup = { inline_keyboard: [[{ text: "🔙 Back to Settings", callback_data: "menu_welcome" }]] };
-                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 32];
-                        return [4 /*yield*/, editMessageText(chatId, messageId, finalMsg, backMarkup)];
-                    case 31:
-                        _b.sent();
-                        return [3 /*break*/, 40];
-                    case 32: 
-                    // Delete old menu message so it doesn't clutter the chat
-                    return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/deleteMessage"), {
-                            method: "POST", headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ chat_id: chatId, message_id: messageId })
-                        })];
-                    case 33:
-                        // Delete old menu message so it doesn't clutter the chat
-                        _b.sent();
                         _a = mediaData.split(':'), mediaType = _a[0], fileId = _a[1];
                         endpoint = "";
-                        payload = { chat_id: chatId, parse_mode: "HTML", reply_markup: backMarkup };
-                        if (!(mediaType === "photo")) return [3 /*break*/, 34];
+                        payload = { chat_id: chatId, parse_mode: "HTML" };
+                        if (!(mediaType === "photo")) return [3 /*break*/, 31];
                         endpoint = "sendPhoto";
                         payload.photo = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 38];
-                    case 34:
-                        if (!(mediaType === "video")) return [3 /*break*/, 35];
+                        return [3 /*break*/, 35];
+                    case 31:
+                        if (!(mediaType === "video")) return [3 /*break*/, 32];
                         endpoint = "sendVideo";
                         payload.video = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 38];
-                    case 35:
-                        if (!(mediaType === "animation")) return [3 /*break*/, 36];
+                        return [3 /*break*/, 35];
+                    case 32:
+                        if (!(mediaType === "animation")) return [3 /*break*/, 33];
                         endpoint = "sendAnimation";
                         payload.animation = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 38];
-                    case 36:
-                        if (!(mediaType === "sticker")) return [3 /*break*/, 38];
-                        // Stickers can't have captions. Send sticker, then send text with back button
+                        return [3 /*break*/, 35];
+                    case 33:
+                        if (!(mediaType === "sticker")) return [3 /*break*/, 35];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendSticker"), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, sticker: fileId })
                             })];
-                    case 37:
-                        // Stickers can't have captions. Send sticker, then send text with back button
+                    case 34:
                         _b.sent();
                         endpoint = "sendMessage";
                         payload.text = finalMsg;
-                        _b.label = 38;
-                    case 38:
-                        if (!endpoint) return [3 /*break*/, 40];
+                        _b.label = 35;
+                    case 35:
+                        if (!endpoint) return [3 /*break*/, 37];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/").concat(endpoint), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload)
                             })];
-                    case 39:
+                    case 36:
                         _b.sent();
-                        _b.label = 40;
-                    case 40: return [2 /*return*/];
+                        _b.label = 37;
+                    case 37: return [2 /*return*/];
                 }
             });
         });
