@@ -134,12 +134,11 @@ exports.GAME = {
                         botUsername = "T_he_Main_Bot";
                         replyMarkup = {
                             inline_keyboard: [
-                                [{ text: "➕ Add me to your group", url: "https://t.me/T_he_Main_Bot?startgroup=true" }],
-                                [{ text: "Start me 🎖️", url: "https://t.me/".concat(botUsername, "?start=start") }],
-                                [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
+                                [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+                                [{ text: "➕ Add to Group", url: "https://t.me/".concat(botUsername, "?startgroup=true") }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
                             ]
                         };
-                        msg = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDC51 <b>WELCOME TO THE UNDERWORLD</b>\n").concat(config_1.UI.BORDER_BOT, "\n\nGreetings, ").concat(firstName, "!\nYour account is secured in the Cloud Vault.");
+                        msg = "\uD83D\uDC51 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ".concat(firstName, ".</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>");
                         return [4 /*yield*/, sendMessage(chatId, msg, replyMarkup)];
                     case 20:
                         _l.sent();
@@ -871,11 +870,11 @@ exports.GAME = {
     // ====================================================
     // ====================================================
     // ╭━━━━━━━━━━━━━━━✪
-    // │ 🕹️ CALLBACK ROUTER (BUTTON CLICKS)
+    // │ 🕹️ CALLBACK ROUTER (DYNAMIC UI & GHOST PROTOCOL)
     // ╰━━━━━━━━━━━━━━━✪
     processCallback: function (query, env, editMessageText, answerCallbackQuery) {
         return __awaiter(this, void 0, void 0, function () {
-            var data, chatId, messageId, userId, botUsername, replyMarkup, replyMarkup, settings, isOn, statusText, replyMarkup, settings, backMarkup, settings, backMarkup, expiresAt, replyMarkup, settings, textTemplate, mediaData, finalMsg, _a, mediaType, fileId, endpoint, payload;
+            var data, chatId, messageId, userId, messageDate, currentTime, botUsername, replyMarkup, msg, user, replyMarkup, msg, replyMarkup, msg, settings, isOn, statusText, replyMarkup, settings, backMarkup, settings, backMarkup, expiresAt, replyMarkup, settings, textTemplate, mediaData, finalMsg, _a, mediaType, fileId, endpoint, payload;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -883,44 +882,65 @@ exports.GAME = {
                         chatId = query.message.chat.id;
                         messageId = query.message.message_id;
                         userId = query.from.id;
-                        return [4 /*yield*/, answerCallbackQuery(query.id)];
+                        messageDate = query.message.date;
+                        currentTime = Math.floor(Date.now() / 1000);
+                        if (!(messageDate && (currentTime - messageDate) > 3600)) return [3 /*break*/, 2];
+                        // Menu is older than 1 hour. Kill it.
+                        return [4 /*yield*/, answerCallbackQuery(query.id, "❌ This menu has expired (1 Hour). Type /start for a new terminal.", true)];
                     case 1:
+                        // Menu is older than 1 hour. Kill it.
+                        _b.sent();
+                        return [2 /*return*/];
+                    case 2: return [4 /*yield*/, answerCallbackQuery(query.id)];
+                    case 3:
                         _b.sent(); // Stops the loading spinner
-                        if (!(data === "menu_start")) return [3 /*break*/, 3];
-                        botUsername = "YOUR_BOT_USERNAME";
+                        if (!(data === "menu_start")) return [3 /*break*/, 5];
+                        botUsername = "T_he_Main_Bot";
                         replyMarkup = {
                             inline_keyboard: [
-                                [{ text: "➕ Add me to your group", url: "https://t.me/".concat(botUsername, "?startgroup=true") }],
-                                [{ text: "Start me 🎖️", url: "https://t.me/".concat(botUsername, "?start=start") }],
-                                [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
+                                [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+                                [{ text: "➕ Add to Group", url: "https://t.me/".concat(botUsername, "?startgroup=true") }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
                             ]
                         };
-                        return [4 /*yield*/, editMessageText(chatId, messageId, "👑 <b>WELCOME TO THE UNDERWORLD</b>\nChoose an option:", replyMarkup)];
-                    case 2:
+                        msg = "\uD83D\uDC51 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, Agent.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>";
+                        return [4 /*yield*/, editMessageText(chatId, messageId, msg, replyMarkup)];
+                    case 4:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 3:
-                        if (!(data === "menu_settings")) return [3 /*break*/, 5];
+                        return [3 /*break*/, 42];
+                    case 5:
+                        if (!(data === "menu_profile")) return [3 /*break*/, 8];
+                        return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
+                    case 6:
+                        user = (_b.sent()) || { balance: 0, kills: 0 };
+                        replyMarkup = { inline_keyboard: [[{ text: "🔙 Back to Hub", callback_data: "menu_start" }]] };
+                        msg = "\uD83D\uDC64 <b>AGENT PROFILE</b>\n\n<blockquote><b>Name:</b> ".concat(query.from.first_name, "\n<b>ID:</b> <code>").concat(userId, "</code>\n<b>Bank Vault:</b> \u20B9").concat(user.balance, "\n<b>Hitman Kills:</b> ").concat(user.kills, "</blockquote>");
+                        return [4 /*yield*/, editMessageText(chatId, messageId, msg, replyMarkup)];
+                    case 7:
+                        _b.sent();
+                        return [3 /*break*/, 42];
+                    case 8:
+                        if (!(data === "menu_settings")) return [3 /*break*/, 10];
                         replyMarkup = {
                             inline_keyboard: [
                                 [{ text: "👋 Welcome", callback_data: "menu_welcome" }, { text: "My friend 🤫", url: "tg://settings" }],
                                 [{ text: "Soon ⏳", callback_data: "alert_soon" }, { text: "Soon ⏳", callback_data: "alert_soon" }],
-                                [{ text: "🔙 Back", callback_data: "menu_start" }]
+                                [{ text: "🔙 Back to Hub", callback_data: "menu_start" }]
                             ]
                         };
-                        return [4 /*yield*/, editMessageText(chatId, messageId, "⚙️ <b>SETTINGS MENU</b>\nConfigure your Underworld experience:", replyMarkup)];
-                    case 4:
+                        msg = "\u2699\uFE0F <b>SETTINGS MENU</b>\n\n<blockquote>Configure your Underworld experience and group rules below.</blockquote>";
+                        return [4 /*yield*/, editMessageText(chatId, messageId, msg, replyMarkup)];
+                    case 9:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 5:
-                        if (!(data === "menu_welcome")) return [3 /*break*/, 9];
+                        return [3 /*break*/, 42];
+                    case 10:
+                        if (!(data === "menu_welcome")) return [3 /*break*/, 14];
                         // Clear any pending setup session if user clicks Back/Cancel
                         return [4 /*yield*/, db_1.DB_MANAGER.clearSession(env.DB, userId)];
-                    case 6:
+                    case 11:
                         // Clear any pending setup session if user clicks Back/Cancel
                         _b.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
-                    case 7:
+                    case 12:
                         settings = _b.sent();
                         isOn = settings && settings.welcome_enabled === 1;
                         statusText = isOn ? "🟢 ON" : "🔴 OFF";
@@ -932,123 +952,123 @@ exports.GAME = {
                             ]
                         };
                         return [4 /*yield*/, editMessageText(chatId, messageId, "\uD83D\uDC4B <b>WELCOME SETTINGS</b>\n\nCurrent Status: <b>".concat(statusText, "</b>\nConfigure how new members are greeted:"), replyMarkup)];
-                    case 8:
-                        _b.sent();
-                        return [3 /*break*/, 37];
-                    case 9:
-                        if (!(data === "alert_soon")) return [3 /*break*/, 11];
-                        return [4 /*yield*/, answerCallbackQuery(query.id, "⏳ Feature coming soon!", true)];
-                    case 10:
-                        _b.sent();
-                        return [3 /*break*/, 37];
-                    case 11:
-                        if (!(data === "wel_on")) return [3 /*break*/, 17];
-                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
-                    case 12:
-                        settings = _b.sent();
-                        if (!(!settings || !settings.welcome_text)) return [3 /*break*/, 14];
-                        return [4 /*yield*/, answerCallbackQuery(query.id, "❌ Please 'Set' a welcome message first!", true)];
                     case 13:
                         _b.sent();
-                        return [2 /*return*/];
-                    case 14: return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1)];
+                        return [3 /*break*/, 42];
+                    case 14:
+                        if (!(data === "alert_soon")) return [3 /*break*/, 16];
+                        return [4 /*yield*/, answerCallbackQuery(query.id, "⏳ Feature coming soon!", true)];
                     case 15:
+                        _b.sent();
+                        return [3 /*break*/, 42];
+                    case 16:
+                        if (!(data === "wel_on")) return [3 /*break*/, 22];
+                        return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
+                    case 17:
+                        settings = _b.sent();
+                        if (!(!settings || !settings.welcome_text)) return [3 /*break*/, 19];
+                        return [4 /*yield*/, answerCallbackQuery(query.id, "❌ Please 'Set' a welcome message first!", true)];
+                    case 18:
+                        _b.sent();
+                        return [2 /*return*/];
+                    case 19: return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 1)];
+                    case 20:
                         _b.sent();
                         backMarkup = { inline_keyboard: [[{ text: "🔙 Back", callback_data: "menu_welcome" }]] };
                         return [4 /*yield*/, editMessageText(chatId, messageId, "✅ <b>Welcome Messages: ON</b>\n\nNew members will now be greeted automatically.", backMarkup)];
-                    case 16:
+                    case 21:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 17:
-                        if (!(data === "wel_off")) return [3 /*break*/, 23];
+                        return [3 /*break*/, 42];
+                    case 22:
+                        if (!(data === "wel_off")) return [3 /*break*/, 28];
                         return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
-                    case 18:
+                    case 23:
                         settings = _b.sent();
-                        if (!(!settings || !settings.welcome_text)) return [3 /*break*/, 20];
+                        if (!(!settings || !settings.welcome_text)) return [3 /*break*/, 25];
                         return [4 /*yield*/, answerCallbackQuery(query.id, "❌ Please 'Set' a welcome message first!", true)];
-                    case 19:
+                    case 24:
                         _b.sent();
                         return [2 /*return*/];
-                    case 20: return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0)];
-                    case 21:
+                    case 25: return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, chatId, 'welcome_enabled', 0)];
+                    case 26:
                         _b.sent();
                         backMarkup = { inline_keyboard: [[{ text: "🔙 Back", callback_data: "menu_welcome" }]] };
                         return [4 /*yield*/, editMessageText(chatId, messageId, "🔴 <b>Welcome Messages: OFF</b>\n\nGreetings are paused.", backMarkup)];
-                    case 22:
+                    case 27:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 23:
-                        if (!(data === "wel_set")) return [3 /*break*/, 26];
+                        return [3 /*break*/, 42];
+                    case 28:
+                        if (!(data === "wel_set")) return [3 /*break*/, 31];
                         expiresAt = Math.floor(Date.now() / 1000) + 1800;
                         return [4 /*yield*/, db_1.DB_MANAGER.setSession(env.DB, userId, chatId, 'awaiting_text', expiresAt)];
-                    case 24:
+                    case 29:
                         _b.sent();
                         replyMarkup = { inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "menu_welcome" }]] };
                         return [4 /*yield*/, editMessageText(chatId, messageId, "📝 <b>WELCOME SETUP [Step 1/2]</b>\n\nSend me the <b>Text Message</b> you want to use for welcoming new members.\n<i>(You can use {name} and {id} in your text)</i>\n\n<i>You have 30 minutes.</i>", replyMarkup)];
-                    case 25:
+                    case 30:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 26:
-                        if (!(data === "wel_see")) return [3 /*break*/, 37];
+                        return [3 /*break*/, 42];
+                    case 31:
+                        if (!(data === "wel_see")) return [3 /*break*/, 42];
                         return [4 /*yield*/, answerCallbackQuery(query.id)];
-                    case 27:
+                    case 32:
                         _b.sent(); // Stop the loading spinner
                         return [4 /*yield*/, db_1.DB_MANAGER.getGroupSettings(env.DB, chatId)];
-                    case 28:
+                    case 33:
                         settings = _b.sent();
                         textTemplate = (settings && settings.welcome_text) ? settings.welcome_text : "Welcome to the Underworld, {name}!";
                         mediaData = settings ? settings.welcome_media_id : null;
                         finalMsg = "👁️ <b>[WELCOME PREVIEW]</b>\n\n" + textTemplate.replace(/{name}/g, query.from.first_name).replace(/{id}/g, userId.toString());
-                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 30];
+                        if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 35];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
                             })];
-                    case 29:
+                    case 34:
                         _b.sent();
-                        return [3 /*break*/, 37];
-                    case 30:
+                        return [3 /*break*/, 42];
+                    case 35:
                         _a = mediaData.split(':'), mediaType = _a[0], fileId = _a[1];
                         endpoint = "";
                         payload = { chat_id: chatId, parse_mode: "HTML" };
-                        if (!(mediaType === "photo")) return [3 /*break*/, 31];
+                        if (!(mediaType === "photo")) return [3 /*break*/, 36];
                         endpoint = "sendPhoto";
                         payload.photo = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 35];
-                    case 31:
-                        if (!(mediaType === "video")) return [3 /*break*/, 32];
+                        return [3 /*break*/, 40];
+                    case 36:
+                        if (!(mediaType === "video")) return [3 /*break*/, 37];
                         endpoint = "sendVideo";
                         payload.video = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 35];
-                    case 32:
-                        if (!(mediaType === "animation")) return [3 /*break*/, 33];
+                        return [3 /*break*/, 40];
+                    case 37:
+                        if (!(mediaType === "animation")) return [3 /*break*/, 38];
                         endpoint = "sendAnimation";
                         payload.animation = fileId;
                         payload.caption = finalMsg;
-                        return [3 /*break*/, 35];
-                    case 33:
-                        if (!(mediaType === "sticker")) return [3 /*break*/, 35];
+                        return [3 /*break*/, 40];
+                    case 38:
+                        if (!(mediaType === "sticker")) return [3 /*break*/, 40];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendSticker"), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, sticker: fileId })
                             })];
-                    case 34:
+                    case 39:
                         _b.sent();
                         endpoint = "sendMessage";
                         payload.text = finalMsg;
-                        _b.label = 35;
-                    case 35:
-                        if (!endpoint) return [3 /*break*/, 37];
+                        _b.label = 40;
+                    case 40:
+                        if (!endpoint) return [3 /*break*/, 42];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/").concat(endpoint), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload)
                             })];
-                    case 36:
+                    case 41:
                         _b.sent();
-                        _b.label = 37;
-                    case 37: return [2 /*return*/];
+                        _b.label = 42;
+                    case 42: return [2 /*return*/];
                 }
             });
         });

@@ -73,22 +73,21 @@ export const GAME = {
 //=====================================================
    // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
     if (text.startsWith("/start")) {
-      const botUsername = "T_he_Main_Bot"; // <-- CHANGE THIS
+      const botUsername = "T_he_Main_Bot"; 
       
       const replyMarkup = {
         inline_keyboard: [
-          [{ text: "➕ Add me to your group", url: `https://t.me/T_he_Main_Bot?startgroup=true` }],
-          [{ text: "Start me 🎖️", url: `https://t.me/${botUsername}?start=start` }],
-          [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
+          [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+          [{ text: "➕ Add to Group", url: `https://t.me/${botUsername}?startgroup=true` }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
       };
 
-      const msg = `${UI.BORDER_TOP}\n│ 👑 <b>WELCOME TO THE UNDERWORLD</b>\n${UI.BORDER_BOT}\n\nGreetings, ${firstName}!\nYour account is secured in the Cloud Vault.`;
+      // Using Telegram's <blockquote> for that premium, shaded UI look
+      const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ${firstName}.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>`;
       
       await sendMessage(chatId, msg, replyMarkup);
       return;
     }
-
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
@@ -782,38 +781,63 @@ ${UI.BORDER_BOT}`;
   // ====================================================
   // ====================================================
   // ╭━━━━━━━━━━━━━━━✪
-  // │ 🕹️ CALLBACK ROUTER (BUTTON CLICKS)
+  // │ 🕹️ CALLBACK ROUTER (DYNAMIC UI & GHOST PROTOCOL)
   // ╰━━━━━━━━━━━━━━━✪
   async processCallback(query: any, env: CloudflareEnv, editMessageText: any, answerCallbackQuery: any) {
     const data = query.data;
     const chatId = query.message.chat.id;
     const messageId = query.message.message_id;
     const userId = query.from.id;
+    const messageDate = query.message.date; // When the menu was created
+
+    // ⏳ UPGRADE 2: THE 1-HOUR GHOST PROTOCOL
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (messageDate && (currentTime - messageDate) > 3600) {
+      // Menu is older than 1 hour. Kill it.
+      await answerCallbackQuery(query.id, "❌ This menu has expired (1 Hour). Type /start for a new terminal.", true);
+      return; 
+    }
 
     await answerCallbackQuery(query.id); // Stops the loading spinner
 
+    // 🖥️ MAIN MENU HUB
     if (data === "menu_start") {
-      const botUsername = "YOUR_BOT_USERNAME"; // <-- DON'T FORGET TO CHANGE THIS
+      const botUsername = "T_he_Main_Bot";
       const replyMarkup = {
         inline_keyboard: [
-          [{ text: "➕ Add me to your group", url: `https://t.me/${botUsername}?startgroup=true` }],
-          [{ text: "Start me 🎖️", url: `https://t.me/${botUsername}?start=start` }],
-          [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
+          [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+          [{ text: "➕ Add to Group", url: `https://t.me/${botUsername}?startgroup=true` }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
       };
-      await editMessageText(chatId, messageId, "👑 <b>WELCOME TO THE UNDERWORLD</b>\nChoose an option:", replyMarkup);
+      const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, Agent.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>`;
+      await editMessageText(chatId, messageId, msg, replyMarkup);
     }
 
+    // 👤 DYNAMIC PROFILE SCREEN
+    else if (data === "menu_profile") {
+      // Fetch fresh stats from the Vault
+      const user = await DB_MANAGER.getUser(env.DB, userId) || { balance: 0, kills: 0 };
+      
+      const replyMarkup = { inline_keyboard: [[{ text: "🔙 Back to Hub", callback_data: "menu_start" }]] };
+      
+      const msg = `👤 <b>AGENT PROFILE</b>\n\n<blockquote><b>Name:</b> ${query.from.first_name}\n<b>ID:</b> <code>${userId}</code>\n<b>Bank Vault:</b> ₹${user.balance}\n<b>Hitman Kills:</b> ${user.kills}</blockquote>`;
+      
+      await editMessageText(chatId, messageId, msg, replyMarkup);
+    }
+
+    // ⚙️ SETTINGS MENU
     else if (data === "menu_settings") {
       const replyMarkup = {
         inline_keyboard: [
           [{ text: "👋 Welcome", callback_data: "menu_welcome" }, { text: "My friend 🤫", url: "tg://settings" }],
           [{ text: "Soon ⏳", callback_data: "alert_soon" }, { text: "Soon ⏳", callback_data: "alert_soon" }],
-          [{ text: "🔙 Back", callback_data: "menu_start" }]
+          [{ text: "🔙 Back to Hub", callback_data: "menu_start" }]
         ]
       };
-      await editMessageText(chatId, messageId, "⚙️ <b>SETTINGS MENU</b>\nConfigure your Underworld experience:", replyMarkup);
+      const msg = `⚙️ <b>SETTINGS MENU</b>\n\n<blockquote>Configure your Underworld experience and group rules below.</blockquote>`;
+      await editMessageText(chatId, messageId, msg, replyMarkup);
     }
+
 
        else if (data === "menu_welcome") {
       // Clear any pending setup session if user clicks Back/Cancel
