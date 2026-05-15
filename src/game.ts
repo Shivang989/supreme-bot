@@ -75,12 +75,13 @@ export const GAME = {
     if (text.startsWith("/start")) {
       const botUsername = "T_he_Main_Bot"; 
       
-      const replyMarkup = {
+        const replyMarkup = {
         inline_keyboard: [
-          [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+          [{ text: "👤 My Profile", callback_data: "menu_profile" }], // <--- Stats removed, Profile is now wide!
           [{ text: "➕ Add to Group", url: `https://t.me/${botUsername}?startgroup=true` }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
       };
+
 
       // Using Telegram's <blockquote> for that premium, shaded UI look
       const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ${firstName}.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>`;
@@ -803,12 +804,13 @@ ${UI.BORDER_BOT}`;
     // 🖥️ MAIN MENU HUB
     if (data === "menu_start") {
       const botUsername = "T_he_Main_Bot";
-      const replyMarkup = {
+         const replyMarkup = {
         inline_keyboard: [
-          [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+          [{ text: "👤 My Profile", callback_data: "menu_profile" }], // <--- Stats removed here too!
           [{ text: "➕ Add to Group", url: `https://t.me/${botUsername}?startgroup=true` }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
       };
+
       const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, Agent.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>`;
       await editMessageText(chatId, messageId, msg, replyMarkup);
     }

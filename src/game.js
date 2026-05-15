@@ -134,7 +134,7 @@ exports.GAME = {
                         botUsername = "T_he_Main_Bot";
                         replyMarkup = {
                             inline_keyboard: [
-                                [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+                                [{ text: "👤 My Profile", callback_data: "menu_profile" }],
                                 [{ text: "➕ Add to Group", url: "https://t.me/".concat(botUsername, "?startgroup=true") }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
                             ]
                         };
@@ -898,7 +898,7 @@ exports.GAME = {
                         botUsername = "T_he_Main_Bot";
                         replyMarkup = {
                             inline_keyboard: [
-                                [{ text: "👤 My Profile", callback_data: "menu_profile" }, { text: "📊 Stats", callback_data: "alert_soon" }],
+                                [{ text: "👤 My Profile", callback_data: "menu_profile" }],
                                 [{ text: "➕ Add to Group", url: "https://t.me/".concat(botUsername, "?startgroup=true") }, { text: "⚙️ Settings", callback_data: "menu_settings" }]
                             ]
                         };
