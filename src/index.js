@@ -41,11 +41,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // ╰━━━━━━━━━━━━━━━✪
 var game_1 = require("./game");
 var config_1 = require("./config");
+var db_1 = require("./db"); // <--- FIXED: Static Import (No more silent crashes)
 exports.default = {
     fetch: function (request, env, ctx) {
         var _a, _b;
         return __awaiter(this, void 0, Promise, function () {
-            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, oldStatus, newStatus, error_1;
+            var update_1, startTime, sendMessage, editMessageText, answerCallbackQuery, oldStatus, newStatus, error_1;
             var _this = this;
             return __generator(this, function (_c) {
                 switch (_c.label) {
@@ -56,19 +57,24 @@ exports.default = {
                         _c.trys.push([1, 4, , 5]);
                         return [4 /*yield*/, request.json()];
                     case 2:
-                        update = _c.sent();
+                        update_1 = _c.sent();
                         startTime = Date.now();
-                        // Ensure new DB tables exist
-                        return [4 /*yield*/, Promise.resolve().then(function () { return require('./db'); }).then(function (m) { return m.DB_MANAGER.initSettings(env.DB); })];
+                        // Safe Database Initialization
+                        return [4 /*yield*/, db_1.DB_MANAGER.initSettings(env.DB)];
                     case 3:
-                        // Ensure new DB tables exist
+                        // Safe Database Initialization
                         _c.sent();
-                        sendMessage = function (chatId, msg, reply_markup) { return __awaiter(_this, void 0, void 0, function () {
-                            var payload;
-                            return __generator(this, function (_a) {
-                                payload = { chat_id: chatId, text: msg, parse_mode: "HTML" };
-                                if (reply_markup)
-                                    payload.reply_markup = reply_markup;
+                        sendMessage = function (arg1, arg2, arg3) { return __awaiter(_this, void 0, void 0, function () {
+                            var isOldFormat, targetChatId, text, markup, payload;
+                            var _a, _b;
+                            return __generator(this, function (_c) {
+                                isOldFormat = typeof arg1 === "string";
+                                targetChatId = isOldFormat ? (((_a = update_1.message) === null || _a === void 0 ? void 0 : _a.chat.id) || ((_b = update_1.callback_query) === null || _b === void 0 ? void 0 : _b.message.chat.id)) : arg1;
+                                text = isOldFormat ? arg1 : arg2;
+                                markup = isOldFormat ? arg2 : arg3;
+                                payload = { chat_id: targetChatId, text: text, parse_mode: "HTML" };
+                                if (markup)
+                                    payload.reply_markup = markup;
                                 return [2 /*return*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
                                         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
                                     })];
@@ -97,23 +103,23 @@ exports.default = {
                                 });
                             });
                         };
-                        // ROUTE 1: BUTTON CLICKS (CALLBACKS)
-                        if (update.callback_query) {
-                            ctx.waitUntil(game_1.GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
+                        // ROUTE 1: BUTTON CLICKS
+                        if (update_1.callback_query) {
+                            ctx.waitUntil(game_1.GAME.processCallback(update_1.callback_query, env, editMessageText, answerCallbackQuery));
                             return [2 /*return*/, new Response("OK", { status: 200 })];
                         }
                         // ROUTE 2: THE FLAWLESS WELCOME TRIGGER (chat_member)
-                        if (update.chat_member) {
-                            oldStatus = (_a = update.chat_member.old_chat_member) === null || _a === void 0 ? void 0 : _a.status;
-                            newStatus = (_b = update.chat_member.new_chat_member) === null || _b === void 0 ? void 0 : _b.status;
+                        if (update_1.chat_member) {
+                            oldStatus = (_a = update_1.chat_member.old_chat_member) === null || _a === void 0 ? void 0 : _a.status;
+                            newStatus = (_b = update_1.chat_member.new_chat_member) === null || _b === void 0 ? void 0 : _b.status;
                             if ((oldStatus === "left" || oldStatus === "kicked") && (newStatus === "member" || newStatus === "restricted")) {
-                                ctx.waitUntil(game_1.GAME.processWelcomeFlawless(update.chat_member, env));
+                                ctx.waitUntil(game_1.GAME.processWelcomeFlawless(update_1.chat_member, env));
                             }
                             return [2 /*return*/, new Response("OK", { status: 200 })];
                         }
-                        // ROUTE 3: NORMAL MESSAGES & MEDIA
-                        if (update.message) {
-                            ctx.waitUntil(game_1.GAME.processCommand(update, env, sendMessage, startTime));
+                        // ROUTE 3: NORMAL MESSAGES
+                        if (update_1.message) {
+                            ctx.waitUntil(game_1.GAME.processCommand(update_1, env, sendMessage, startTime));
                         }
                         return [2 /*return*/, new Response("OK", { status: 200 })];
                     case 4:
