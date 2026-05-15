@@ -44,7 +44,7 @@ var config_1 = require("./config");
 exports.default = {
     fetch: function (request, env, ctx) {
         return __awaiter(this, void 0, Promise, function () {
-            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, error_1;
+            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, oldStatus, newStatus;
             var _this = this;
             return __generator(this, function (_a) {
                 switch (_a.label) {
@@ -52,7 +52,7 @@ exports.default = {
                         if (!(request.method === "POST")) return [3 /*break*/, 5];
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 4, , 5]);
+                        _a.trys.push([1, , 4, 5]);
                         return [4 /*yield*/, request.json()];
                     case 2:
                         update = _a.sent();
@@ -101,22 +101,24 @@ exports.default = {
                             ctx.waitUntil(game_1.GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
                             return [2 /*return*/, new Response("OK", { status: 200 })];
                         }
-                        // ROUTE 2: NEW MEMBERS JOINING (THE TRIGGER)
-                        if (update.message && update.message.new_chat_members) {
-                            ctx.waitUntil(game_1.GAME.processNewMember(update, env));
+                        // ROUTE 2: THE FLAWLESS WELCOME TRIGGER (chat_member)
+                        if (update.chat_member) {
+                            oldStatus = update.chat_member.old_chat_member.status;
+                            newStatus = update.chat_member.new_chat_member.status;
+                            if ((oldStatus === "left" || oldStatus === "kicked") && (newStatus === "member" || newStatus === "restricted")) {
+                                ctx.waitUntil(game_1.GAME.processWelcomeFlawless(update.chat_member, env));
+                            }
                             return [2 /*return*/, new Response("OK", { status: 200 })];
                         }
                         // ROUTE 3: NORMAL MESSAGES & MEDIA
                         if (update.message) {
-                            // Pass the entire update to GAME so it can intercept text OR media
                             ctx.waitUntil(game_1.GAME.processCommand(update, env, sendMessage, startTime));
                         }
                         return [2 /*return*/, new Response("OK", { status: 200 })];
-                    case 4:
-                        error_1 = _a.sent();
-                        console.error("Critical Router Error:", error_1);
-                        return [2 /*return*/, new Response("OK", { status: 200 })]; // Always return OK to Telegram so it doesn't retry
-                    case 5: return [2 /*return*/, new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 })];
+                    case 4: return [7 /*endfinally*/];
+                    case 5:
+                        ;
+                        return [2 /*return*/];
                 }
             });
         });

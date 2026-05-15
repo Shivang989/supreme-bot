@@ -41,32 +41,31 @@ export default {
           });
         };
 
-        // ROUTE 1: BUTTON CLICKS (CALLBACKS)
+         // ROUTE 1: BUTTON CLICKS (CALLBACKS)
         if (update.callback_query) {
           ctx.waitUntil(GAME.processCallback(update.callback_query, env, editMessageText, answerCallbackQuery));
           return new Response("OK", { status: 200 });
         }
 
-        // ROUTE 2: NEW MEMBERS JOINING (THE TRIGGER)
-        if (update.message && update.message.new_chat_members) {
-          ctx.waitUntil(GAME.processNewMember(update, env));
+        // ROUTE 2: THE FLAWLESS WELCOME TRIGGER (chat_member)
+        if (update.chat_member) {
+          // Check if they ACTUALLY joined (Status changed from left/kicked to member/restricted)
+          const oldStatus = update.chat_member.old_chat_member.status;
+          const newStatus = update.chat_member.new_chat_member.status;
+          
+          if ((oldStatus === "left" || oldStatus === "kicked") && (newStatus === "member" || newStatus === "restricted")) {
+            ctx.waitUntil(GAME.processWelcomeFlawless(update.chat_member, env));
+          }
           return new Response("OK", { status: 200 });
         }
 
         // ROUTE 3: NORMAL MESSAGES & MEDIA
         if (update.message) {
-          // Pass the entire update to GAME so it can intercept text OR media
           ctx.waitUntil(GAME.processCommand(update, env, sendMessage, startTime));
         }
-
         
         return new Response("OK", { status: 200 });
-      } catch (error) {
-        console.error("Critical Router Error:", error);
-        return new Response("OK", { status: 200 }); // Always return OK to Telegram so it doesn't retry
-      }
-    }
-    return new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 });
+
   }
 };
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END

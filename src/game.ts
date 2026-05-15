@@ -25,10 +25,18 @@ export const GAME = {
     const currentTime = Math.floor(Date.now() / 1000);
 
     if (session && session.expires_at > currentTime) {
-      if (session.step === 'awaiting_text' && message.text) {
+          if (session.step === 'awaiting_text' && message.text) {
         await DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_text', message.text);
         await DB_MANAGER.setSession(env.DB, userId, session.chat_id, 'awaiting_media', currentTime + 1800);
         await sendMessage(chatId, "✅ <b>Text Saved!</b>\nNow send the Media (Photo, Video under 15s, or Sticker).\n<i>Send 'skip' if you only want text.</i>");
+        
+        // FLAWLESS FIX: Delete the admin's setup message so it doesn't clutter the group!
+        try {
+            await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/deleteMessage`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: chatId, message_id: message.message_id })
+            });
+        } catch(e) {} // Ignore if bot lacks admin rights to delete
         return;
       }
       if (session.step === 'awaiting_media') {
@@ -903,63 +911,67 @@ ${UI.BORDER_BOT}`;
       }
     }
   }, // <--- Closes processCallback
+  
 
   // ╭━━━━━━━━━━━━━━━✪
-  // │ 🚪 THE GREETING PROTOCOL (NEW MEMBERS)
+  // │ 🚪 THE FLAWLESS GREETING PROTOCOL
   // ╰━━━━━━━━━━━━━━━✪
-  async processNewMember(update: any, env: CloudflareEnv) {
-    const message = update.message;
-    const chatId = message.chat.id;
-    const newMembers = message.new_chat_members;
+  async processWelcomeFlawless(chatMemberUpdate: any, env: CloudflareEnv) {
+    const chatId = chatMemberUpdate.chat.id;
+    const chatTitle = chatMemberUpdate.chat.title || "the group";
+    const user = chatMemberUpdate.new_chat_member.user;
+
+    if (user.is_bot) return; // Do not welcome other bots
 
     // Check if the group has Welcomes turned ON
     const settings = await DB_MANAGER.getGroupSettings(env.DB, chatId);
     if (!settings || settings.welcome_enabled !== 1) return;
 
-    let textTemplate = settings.welcome_text || "Welcome to the Underworld, {name}!";
+    let textTemplate = settings.welcome_text || "Welcome {first} to {group}!";
     const mediaData = settings.welcome_media_id; 
 
-    for (const member of newMembers) {
-      if (member.is_bot) continue; // Don't welcome other bots
+    // --- BEGINNER-FRIENDLY DECORATION REPLACER ---
+    let finalMsg = textTemplate
+      .replace(/{first}/gi, user.first_name || "Agent")
+      .replace(/{last}/gi, user.last_name || "")
+      .replace(/{name}/gi, (`${user.first_name || ""} ${user.last_name || ""}`).trim() || "Agent")
+      .replace(/{username}/gi, user.username ? `@${user.username}` : user.first_name)
+      .replace(/{id}/gi, user.id.toString())
+      .replace(/{group}/gi, chatTitle);
 
-      const name = member.first_name || "Agent";
-      // Auto-replace {name} and {id} with the real user's details
-      let finalMsg = textTemplate.replace(/{name}/g, name).replace(/{id}/g, member.id.toString());
+    // --- SENDING LOGIC (Using Free Telegram Cloud Storage) ---
+    // No media? Just send text.
+    if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
+      await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+      });
+    } 
+    // Has Media? Send media with the text as a caption!
+    else {
+      const [mediaType, fileId] = mediaData.split(':');
+      let endpoint = "";
+      let payload: any = { chat_id: chatId, parse_mode: "HTML" };
 
-      // No media? Just send text.
-      if (!mediaData || mediaData === 'none' || !mediaData.includes(':')) {
-        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+      if (mediaType === "photo") { endpoint = "sendPhoto"; payload.photo = fileId; payload.caption = finalMsg; }
+      else if (mediaType === "video") { endpoint = "sendVideo"; payload.video = fileId; payload.caption = finalMsg; }
+      else if (mediaType === "animation") { endpoint = "sendAnimation"; payload.animation = fileId; payload.caption = finalMsg; }
+      else if (mediaType === "sticker") { 
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendSticker`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, text: finalMsg, parse_mode: "HTML" })
+          body: JSON.stringify({ chat_id: chatId, sticker: fileId })
         });
-      } 
-      // Has Media? Send media with the text as a caption!
-      else {
-        const [mediaType, fileId] = mediaData.split(':');
-        let endpoint = "";
-        let payload: any = { chat_id: chatId, parse_mode: "HTML" };
+        endpoint = "sendMessage"; 
+        payload.text = finalMsg;
+      }
 
-        if (mediaType === "photo") { endpoint = "sendPhoto"; payload.photo = fileId; payload.caption = finalMsg; }
-        else if (mediaType === "video") { endpoint = "sendVideo"; payload.video = fileId; payload.caption = finalMsg; }
-        else if (mediaType === "animation") { endpoint = "sendAnimation"; payload.animation = fileId; payload.caption = finalMsg; }
-        else if (mediaType === "sticker") { 
-          // Stickers can't have captions. Send sticker, then send the text message separately.
-          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendSticker`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, sticker: fileId })
-          });
-          endpoint = "sendMessage"; 
-          payload.text = finalMsg;
-        }
-
-        if (endpoint) {
-          await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/${endpoint}`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-        }
+      if (endpoint) {
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/${endpoint}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
       }
     }
-  } // <-- Closes processNewMember
+  }
 }; // <-- Closes the GAME object
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END OF GAME FILE
