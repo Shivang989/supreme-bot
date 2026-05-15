@@ -930,14 +930,24 @@ ${UI.BORDER_BOT}`;
     let textTemplate = settings.welcome_text || "Welcome {first} to {group}!";
     const mediaData = settings.welcome_media_id; 
 
+    // --- SECURITY SHIELD (Prevents HTML Crashes) ---
+    const escapeHtml = (str: string) => str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    
+    const safeFirst = escapeHtml(user.first_name || "Agent");
+    const safeLast = escapeHtml(user.last_name || "");
+    const safeName = escapeHtml((`${user.first_name || ""} ${user.last_name || ""}`).trim() || "Agent");
+    const safeUsername = user.username ? `@${escapeHtml(user.username)}` : safeFirst;
+    const safeGroup = escapeHtml(chatTitle);
+
     // --- BEGINNER-FRIENDLY DECORATION REPLACER ---
     let finalMsg = textTemplate
-      .replace(/{first}/gi, user.first_name || "Agent")
-      .replace(/{last}/gi, user.last_name || "")
-      .replace(/{name}/gi, (`${user.first_name || ""} ${user.last_name || ""}`).trim() || "Agent")
-      .replace(/{username}/gi, user.username ? `@${user.username}` : user.first_name)
+      .replace(/{first}/gi, safeFirst)
+      .replace(/{last}/gi, safeLast)
+      .replace(/{name}/gi, safeName)
+      .replace(/{username}/gi, safeUsername)
       .replace(/{id}/gi, user.id.toString())
-      .replace(/{group}/gi, chatTitle);
+      .replace(/{group}/gi, safeGroup);
+
 
     // --- SENDING LOGIC (Using Free Telegram Cloud Storage) ---
     // No media? Just send text.

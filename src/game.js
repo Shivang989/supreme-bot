@@ -1058,7 +1058,7 @@ exports.GAME = {
     // ╰━━━━━━━━━━━━━━━✪
     processWelcomeFlawless: function (chatMemberUpdate, env) {
         return __awaiter(this, void 0, void 0, function () {
-            var chatId, chatTitle, user, settings, textTemplate, mediaData, finalMsg, _a, mediaType, fileId, endpoint, payload;
+            var chatId, chatTitle, user, settings, textTemplate, mediaData, escapeHtml, safeFirst, safeLast, safeName, safeUsername, safeGroup, finalMsg, _a, mediaType, fileId, endpoint, payload;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
@@ -1074,13 +1074,19 @@ exports.GAME = {
                             return [2 /*return*/];
                         textTemplate = settings.welcome_text || "Welcome {first} to {group}!";
                         mediaData = settings.welcome_media_id;
+                        escapeHtml = function (str) { return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
+                        safeFirst = escapeHtml(user.first_name || "Agent");
+                        safeLast = escapeHtml(user.last_name || "");
+                        safeName = escapeHtml(("".concat(user.first_name || "", " ").concat(user.last_name || "")).trim() || "Agent");
+                        safeUsername = user.username ? "@".concat(escapeHtml(user.username)) : safeFirst;
+                        safeGroup = escapeHtml(chatTitle);
                         finalMsg = textTemplate
-                            .replace(/{first}/gi, user.first_name || "Agent")
-                            .replace(/{last}/gi, user.last_name || "")
-                            .replace(/{name}/gi, ("".concat(user.first_name || "", " ").concat(user.last_name || "")).trim() || "Agent")
-                            .replace(/{username}/gi, user.username ? "@".concat(user.username) : user.first_name)
+                            .replace(/{first}/gi, safeFirst)
+                            .replace(/{last}/gi, safeLast)
+                            .replace(/{name}/gi, safeName)
+                            .replace(/{username}/gi, safeUsername)
                             .replace(/{id}/gi, user.id.toString())
-                            .replace(/{group}/gi, chatTitle);
+                            .replace(/{group}/gi, safeGroup);
                         if (!(!mediaData || mediaData === 'none' || !mediaData.includes(':'))) return [3 /*break*/, 3];
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/sendMessage"), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
