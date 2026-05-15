@@ -77,7 +77,7 @@ export const GAME = {
       
       const replyMarkup = {
         inline_keyboard: [
-          [{ text: "➕ Add me to your group", url: `https://t.me/${botUsername}?startgroup=true` }],
+          [{ text: "➕ Add me to your group", url: `https://t.me/T_he_Main_Bot?startgroup=true` }],
           [{ text: "Start me 🎖️", url: `https://t.me/${botUsername}?start=start` }],
           [{ text: "⚙️ Settings", callback_data: "menu_settings" }]
         ]
