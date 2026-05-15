@@ -43,25 +43,26 @@ var game_1 = require("./game");
 var config_1 = require("./config");
 exports.default = {
     fetch: function (request, env, ctx) {
+        var _a, _b;
         return __awaiter(this, void 0, Promise, function () {
-            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, oldStatus, newStatus;
+            var update, startTime, sendMessage, editMessageText, answerCallbackQuery, oldStatus, newStatus, error_1;
             var _this = this;
-            return __generator(this, function (_a) {
-                switch (_a.label) {
+            return __generator(this, function (_c) {
+                switch (_c.label) {
                     case 0:
                         if (!(request.method === "POST")) return [3 /*break*/, 5];
-                        _a.label = 1;
+                        _c.label = 1;
                     case 1:
-                        _a.trys.push([1, , 4, 5]);
+                        _c.trys.push([1, 4, , 5]);
                         return [4 /*yield*/, request.json()];
                     case 2:
-                        update = _a.sent();
+                        update = _c.sent();
                         startTime = Date.now();
                         // Ensure new DB tables exist
                         return [4 /*yield*/, Promise.resolve().then(function () { return require('./db'); }).then(function (m) { return m.DB_MANAGER.initSettings(env.DB); })];
                     case 3:
                         // Ensure new DB tables exist
-                        _a.sent();
+                        _c.sent();
                         sendMessage = function (chatId, msg, reply_markup) { return __awaiter(_this, void 0, void 0, function () {
                             var payload;
                             return __generator(this, function (_a) {
@@ -103,8 +104,8 @@ exports.default = {
                         }
                         // ROUTE 2: THE FLAWLESS WELCOME TRIGGER (chat_member)
                         if (update.chat_member) {
-                            oldStatus = update.chat_member.old_chat_member.status;
-                            newStatus = update.chat_member.new_chat_member.status;
+                            oldStatus = (_a = update.chat_member.old_chat_member) === null || _a === void 0 ? void 0 : _a.status;
+                            newStatus = (_b = update.chat_member.new_chat_member) === null || _b === void 0 ? void 0 : _b.status;
                             if ((oldStatus === "left" || oldStatus === "kicked") && (newStatus === "member" || newStatus === "restricted")) {
                                 ctx.waitUntil(game_1.GAME.processWelcomeFlawless(update.chat_member, env));
                             }
@@ -115,10 +116,11 @@ exports.default = {
                             ctx.waitUntil(game_1.GAME.processCommand(update, env, sendMessage, startTime));
                         }
                         return [2 /*return*/, new Response("OK", { status: 200 })];
-                    case 4: return [7 /*endfinally*/];
-                    case 5:
-                        ;
-                        return [2 /*return*/];
+                    case 4:
+                        error_1 = _c.sent();
+                        console.error("Critical Router Error:", error_1);
+                        return [2 /*return*/, new Response("OK", { status: 200 })];
+                    case 5: return [2 /*return*/, new Response("🚀 Supreme Engine UI is ONLINE!", { status: 200 })];
                 }
             });
         });
