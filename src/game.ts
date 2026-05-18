@@ -119,7 +119,7 @@ ${UI.BORDER_BOT}`;
     // ╭━━━━━━━━━━━━━━━✪ [MARKET FEATURE]
     if (text.startsWith("/market")) {
       const currentTime = Math.floor(Date.now() / 1000);
-      let marketText = `${UI.BORDER_TOP}\n│ 📈 <b>𝐔𝐍𝐃𝐄𝐑𝐖𝐎𝐑𝐋𝐃 𝐌𝐀𝐑𝐊𝐄𝐓</b>\n${UI.BORDER_BOT}\n\n`;
+      let marketText = `${UI.BORDER_TOP}\n│ 📈 <b>𝐔𝐍𝐃𝐄𝐑l𝐖𝐎𝐑𝐋𝐃l 𝐌𝐀𝐑𝐊𝐄𝐓</b>\n${UI.BORDER_BOT}\n\n`;
       
       // CONFIG se items uthayenge aur MUSCLE se price calculate karwayenge
       for (const [itemKey, data] of Object.entries(MARKET_ITEMS)) {
@@ -327,14 +327,14 @@ ${UI.BORDER_BOT}`;
 
       // 6. Shield Check (Refunds ammo because they couldn't penetrate the shield)
       if (targetDb.protection_until && targetDb.protection_until > now) {
-        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\nYour shot bounced off ${targetDisplay}'s protection field.\n<i>(Bullet refunded)</i>`);
+        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\nYour shot bounced off ${targetDisplay}'s protection field.\n<i>(refunded)</i>`);
         return;
       }
 
       // 7. Dead Target Check (Wastes the bullet, 0 payout)
       if (targetDb.is_alive === 0) {
         await env.DB.prepare(`UPDATE users SET ammo = ammo - 1 WHERE user_id = ?`).bind(tgShooter.id).run();
-        await sendMessage(chatId, `💀 <b>WASTED AMMO!</b>\n${targetDisplay} is already dead. You just shot a corpse and lost 1 bullet.`);
+        await sendMessage(chatId, `💀 <b>WASTED AMMO!</b>\n${targetDisplay} is already dead.`);
         return;
       }
 
@@ -415,7 +415,7 @@ ${UI.BORDER_BOT}`;
       }
 
       if (targetId === tgRaider.id) {
-        await sendMessage(chatId, "❌ You cannot rob yourself.");
+        await sendMessage(chatId, "❌ Don't rob Yourself.");
         return;
       }
 
@@ -456,7 +456,7 @@ ${UI.BORDER_BOT}`;
         return;
       }
       if (targetDb.balance < 100) {
-        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}. Not worth the risk.`);
+        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}.`);
         return;
       }
 

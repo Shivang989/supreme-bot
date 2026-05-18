@@ -159,7 +159,7 @@ exports.GAME = {
                     case 24:
                         if (!text.startsWith("/market")) return [3 /*break*/, 26];
                         currentTime_1 = Math.floor(Date.now() / 1000);
-                        marketText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCC8 <b>\uD835\uDC14\uD835\uDC0D\uD835\uDC03\uD835\uDC04\uD835\uDC11\uD835\uDC16\uD835\uDC0E\uD835\uDC11\uD835\uDC0B\uD835\uDC03 \uD835\uDC0C\uD835\uDC00\uD835\uDC11\uD835\uDC0A\uD835\uDC04\uD835\uDC13</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
+                        marketText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCC8 <b>\uD835\uDC14\uD835\uDC0D\uD835\uDC03\uD835\uDC04\uD835\uDC11l\uD835\uDC16\uD835\uDC0E\uD835\uDC11\uD835\uDC0B\uD835\uDC03l \uD835\uDC0C\uD835\uDC00\uD835\uDC11\uD835\uDC0A\uD835\uDC04\uD835\uDC13</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         // CONFIG se items uthayenge aur MUSCLE se price calculate karwayenge
                         for (_i = 0, _d = Object.entries(config_1.MARKET_ITEMS); _i < _d.length; _i++) {
                             _e = _d[_i], itemKey = _e[0], data = _e[1];
@@ -383,7 +383,7 @@ exports.GAME = {
                         return [2 /*return*/];
                     case 75:
                         if (!(targetDb.protection_until && targetDb.protection_until > now)) return [3 /*break*/, 77];
-                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDEE1\uFE0F <b>TARGET SHIELDED!</b>\nYour shot bounced off ".concat(targetDisplay, "'s protection field.\n<i>(Bullet refunded)</i>"))];
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDEE1\uFE0F <b>TARGET SHIELDED!</b>\nYour shot bounced off ".concat(targetDisplay, "'s protection field.\n<i>(refunded)</i>"))];
                     case 76:
                         _j.sent();
                         return [2 /*return*/];
@@ -392,7 +392,7 @@ exports.GAME = {
                         return [4 /*yield*/, env.DB.prepare("UPDATE users SET ammo = ammo - 1 WHERE user_id = ?").bind(tgShooter.id).run()];
                     case 78:
                         _j.sent();
-                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDC80 <b>WASTED AMMO!</b>\n".concat(targetDisplay, " is already dead. You just shot a corpse and lost 1 bullet."))];
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDC80 <b>WASTED AMMO!</b>\n".concat(targetDisplay, " is already dead."))];
                     case 79:
                         _j.sent();
                         return [2 /*return*/];
@@ -471,7 +471,7 @@ exports.GAME = {
                         return [2 /*return*/];
                     case 97:
                         if (!(targetId === tgRaider.id)) return [3 /*break*/, 99];
-                        return [4 /*yield*/, sendMessage(chatId, "❌ You cannot rob yourself.")];
+                        return [4 /*yield*/, sendMessage(chatId, "❌ Don't rob Yourself.")];
                     case 98:
                         _j.sent();
                         return [2 /*return*/];
@@ -529,7 +529,7 @@ exports.GAME = {
                         return [2 /*return*/];
                     case 114:
                         if (!(targetDb.balance < 100)) return [3 /*break*/, 116];
-                        return [4 /*yield*/, sendMessage(chatId, "\u274C <b>Target is too poor.</b> They only have \u20B9".concat(targetDb.balance, ". Not worth the risk."))];
+                        return [4 /*yield*/, sendMessage(chatId, "\u274C <b>Target is too poor.</b> They only have \u20B9".concat(targetDb.balance, "."))];
                     case 115:
                         _j.sent();
                         return [2 /*return*/];
