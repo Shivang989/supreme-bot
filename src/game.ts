@@ -84,7 +84,7 @@ export const GAME = {
 
 
       // Using Telegram's <blockquote> for that premium, shaded UI look
-      const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ${firstName}.</b>\nConnection established. All systems are green. Select a module below to begin.</blockquote>`;
+      const msg = `👑 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ${firstName}.</b>\nConnection established. All systems are green. Select a option below to begin.</blockquote>`;
       
       await sendMessage(chatId, msg, replyMarkup);
       return;
@@ -297,71 +297,113 @@ ${UI.BORDER_BOT}`;
 
 
 // ====================================================
-    // ╭━━━━━━━━━━━━━━━✪ [ROB FEATURE]
+    // ╭━━━━━━━━━━━━━━━✪ [THE ROB / RAID MECHANIC]
     if (text.startsWith("/rob")) {
-      if (!update.message.reply_to_message) {
-        await sendMessage(`${EMOJIS.error} Kisko lootna hai? Reply to their message.`);
+      const now = Math.floor(Date.now() / 1000);
+      const tgRaider = update.message.from;
+      const messageId = update.message.message_id;
+      const replyTo = update.message.reply_to_message;
+
+      // 1. Parse Command
+      const cleanText = text.replace(/^\/rob(?:@\S+)?/i, "").trim();
+      const parts = cleanText.split(/\s+/).filter(Boolean);
+      const parsedAmount = parts[0] ? parseInt(parts[0], 10) : NaN;
+      const parsedId = parts[1] ? parseInt(parts[1], 10) : NaN;
+
+      const amount = (!isNaN(parsedAmount) && parsedAmount > 0) ? parsedAmount : 500;
+      let targetId: number | null = null;
+      let targetDisplay = "";
+
+      if (replyTo && replyTo.from) {
+        targetId = replyTo.from.id;
+        targetDisplay = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name;
+      } else if (!isNaN(parsedId) && parsedId > 0) {
+        targetId = parsedId;
+        targetDisplay = `ID: <code>${parsedId}</code>`;
+      } else {
+        await sendMessage(chatId, "❌ <b>Usage:</b> <code>/rob [amount] [id]</code>\nOr reply to a user's message with <code>/rob [amount]</code>.");
         return;
       }
 
-      const targetId = update.message.reply_to_message.from.id;
-      const targetName = update.message.reply_to_message.from.first_name || "Target";
-
-      if (userId === targetId) return;
-      if (update.message.reply_to_message.from.is_bot) {
-         await sendMessage(`${EMOJIS.error} Bot ki jeb khaali hoti hai.`);
-         return;
-      }
-
-      const robber = await DB_MANAGER.getUser(env.DB, userId);
-      if (!robber || robber.is_alive === 0) {
-        await sendMessage(`${EMOJIS.dead} Bhoot chori nahi kar sakte. Pehle /revive use kar.`);
+      if (targetId === tgRaider.id) {
+        await sendMessage(chatId, "❌ You cannot rob yourself.");
         return;
       }
 
-      await DB_MANAGER.ensureUserExists(env.DB, targetId);
-      const target = await DB_MANAGER.getUser(env.DB, targetId);
-      
-      if (!target || target.is_alive === 0) {
-        await sendMessage(`${EMOJIS.error} Murdo ke paas paise nahi hote bhai.`);
+      // 2. Fetch/Upsert Raider
+      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, last_raid_time, raid_spam_strikes, raid_lock_until) VALUES (?, 0, 0, 0, 0)`).bind(tgRaider.id).run();
+      const raider = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(tgRaider.id).first<any>();
+
+      // 3. Anti-Spam Gate
+      if (raider.raid_lock_until > now) {
+        const remaining = raider.raid_lock_until - now;
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        await sendMessage(chatId, `🔒 <b>LOCKED OUT!</b>\nYou spammed /rob too fast. Wait <b>${mins}m ${secs}s</b>.`);
         return;
       }
 
-      // 🛡️ SHIELD CHECK FOR ROBBERY
-      const currentSeconds = Math.floor(Date.now() / 1000);
-      if (target.protection_until && target.protection_until > currentSeconds) {
-        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>A T T A C K   B L O C K E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${targetName}</b> is under Underworld Protection!\nGuard dogs chased you away.`);
-        return;
-      }
-
-      if (target.balance < 100) {
-        await sendMessage(`${EMOJIS.error} <b>${targetName}</b> ke paas phooti kaudi nahi hai. Garib ko kya lootega?`);
-        return;
-      }
-
-      // RNG for Robbery (45% Success Chance)
-      const roll = Math.floor(Math.random() * 100) + 1;
-      
-      if (roll <= 45) { // Success
-        const stealPercent = Math.floor(Math.random() * (30 - 10 + 1)) + 10;
-        const stolenAmount = Math.floor(target.balance * (stealPercent / 100));
-
-        await DB_MANAGER.updateBalance(env.DB, userId, robber.balance + stolenAmount);
-        await DB_MANAGER.updateBalance(env.DB, targetId, target.balance - stolenAmount);
-
-        await sendMessage(`${UI.BORDER_TOP}\n│ 🦹‍♂️ <b>H E I S T   S U C C E S S</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.success} <b>${firstName}</b> ne <b>${targetName}</b> ki jeb kaat li!\n\n💰 <b>Looted:</b> ₹${stolenAmount}\n🏃‍♂️ <i>Bhaag jaldi bhaag!</i>`);
-      } else { // Fail - Pay 15% fine to the target
-        const fineAmount = Math.floor(robber.balance * 0.15); 
-        if (fineAmount > 0) {
-          await DB_MANAGER.updateBalance(env.DB, userId, robber.balance - fineAmount);
-          await DB_MANAGER.updateBalance(env.DB, targetId, target.balance + fineAmount);
-          await sendMessage(`${UI.BORDER_TOP}\n│ 🚨 <b>B U S T E D !</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${firstName}</b> chori karte hue pakda gaya!\n\n💸 <b>Penalty Paid:</b> ₹${fineAmount} to ${targetName}\n👮‍♂️ <i>Agli baar dhyan se!</i>`);
+      const timeSinceLast = now - raider.last_raid_time;
+      if (timeSinceLast < 2) { // 2 Second Cooldown
+        const newStrikes = raider.raid_spam_strikes + 1;
+        if (newStrikes >= 4) {
+          const lockUntil = now + 240; // 4 Minutes
+          await env.DB.prepare(`UPDATE users SET raid_spam_strikes = 0, raid_lock_until = ? WHERE user_id = ?`).bind(lockUntil, tgRaider.id).run();
+          await sendMessage(chatId, `⛔ <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. You are banned from robbing for 4 minutes.`);
         } else {
-          await sendMessage(`${UI.BORDER_TOP}\n│ 🚨 <b>B U S T E D !</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${firstName}</b> chori karte hue pakda gaya!\n\nLekin jeb khali hone ki wajah se bas pitayi kha ke chhut gaya.`);
+          await env.DB.prepare(`UPDATE users SET raid_spam_strikes = ? WHERE user_id = ?`).bind(newStrikes, tgRaider.id).run();
+          await sendMessage(chatId, `⚠️ <b>Slow down!</b> Strike <b>${newStrikes}/4</b>. Hit 4 and you are locked out.`);
         }
+        return;
+      }
+
+      // Update last active time safely
+      await env.DB.prepare(`UPDATE users SET raid_spam_strikes = 0, last_raid_time = ? WHERE user_id = ?`).bind(now, tgRaider.id).run();
+
+      // 4. Target Check
+      const targetDb = await env.DB.prepare(`SELECT balance FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
+      if (!targetDb) {
+        await sendMessage(chatId, "❌ Target not found in the Underworld database.");
+        return;
+      }
+      if (targetDb.balance < 100) {
+        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}. Not worth the risk.`);
+        return;
+      }
+
+      // 5. The RNG & Economy
+      const cappedAmount = Math.min(amount, targetDb.balance);
+      const roll = Math.random() * 100;
+
+      if (roll < 90) {
+        // SUCCESS (90%)
+        await env.DB.batch([
+          env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(cappedAmount, targetId),
+          env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE user_id = ?`).bind(cappedAmount, tgRaider.id)
+        ]);
+        await sendMessage(chatId, `🎭 <b>HEIST SUCCESSFUL!</b>\n\n<blockquote>${tgRaider.first_name} slipped into the shadows and stole <b>₹${cappedAmount}</b> from ${targetDisplay}.\n<i>Clean exit. No witnesses.</i></blockquote>`);
+      
+      } else if (roll < 95) {
+        // FAILURE (5%)
+        const fivePercent = Math.floor(raider.balance * 0.05);
+        const penalty = fivePercent >= 100 ? fivePercent : 100; // The -100 Broke Debt Rule!
+        await env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(penalty, tgRaider.id).run();
+        
+        const brokeMsg = raider.balance < 100 ? "\n<i>You were already broke. Your account is now in negative debt!</i>" : "";
+        await sendMessage(chatId, `🚨 <b>BUSTED BY SECURITY!</b>\n\n<blockquote>${tgRaider.first_name} tripped the alarms trying to hit ${targetDisplay}!\n\n💸 <b>Penalty:</b> ₹${penalty} burned to ash.${brokeMsg}</blockquote>`);
+      
+      } else {
+        // JACKPOT (5%)
+        const totalGain = cappedAmount + 2000;
+        await env.DB.batch([
+          env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(cappedAmount, targetId),
+          env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE user_id = ?`).bind(totalGain, tgRaider.id)
+        ]);
+        await sendMessage(chatId, `💎 <b>JACKPOT HEIST!</b>\n\n<blockquote>${tgRaider.first_name} pulled off the raid of the century against ${targetDisplay}!\n\n💰 Stolen: <b>₹${cappedAmount}</b>\n✨ Bonus Minted: <b>₹2000</b>\n🏆 Total Haul: <b>₹${totalGain}</b></blockquote>`);
       }
       return;
     }
+
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
