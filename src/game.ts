@@ -369,6 +369,22 @@ ${UI.BORDER_BOT}`;
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
+    // ====================================================
+    // ╭━━━━━━━━━━━━━━━✪ [CHECK AMMO FEATURE]
+    if (text.toLowerCase() === "/b" || text.toLowerCase() === "/bullets" || text.toLowerCase() === "/ammo") {
+      // Ensure user exists in DB so we don't get a null error
+      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`).bind(userId).run();
+      
+      const user = await env.DB.prepare(`SELECT ammo FROM users WHERE user_id = ? LIMIT 1`).bind(userId).first<any>();
+      
+      const ammoCount = user ? user.ammo : 0;
+      
+      await sendMessage(chatId, `🔫 <b>AMMO INVENTORY</b>\n\n<blockquote>Boss, you currently have <b>${ammoCount}</b> bullets left in your magazine.</blockquote>`);
+      return;
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+
+
 // ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [THE ROB / RAID MECHANIC]
     if (text.startsWith("/rob")) {
