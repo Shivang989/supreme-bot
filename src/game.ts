@@ -231,65 +231,138 @@ ${UI.BORDER_BOT}`;
 
 
 // ====================================================
-    // ╭━━━━━━━━━━━━━━━✪ [KILL FEATURE]
-    if (text.startsWith("/kill") || text.startsWith("/k ")) {
-      if (!update.message.reply_to_message) {
-        await sendMessage(`${EMOJIS.error} Kisko tapkana hai? Reply to a player.`);
-        return;
-      }
-
-      const targetId = update.message.reply_to_message.from.id;
-      const targetName = update.message.reply_to_message.from.first_name || "Agent";
-
-      if (userId === targetId) {
-        await sendMessage(`${EMOJIS.error} Khud ko kyu maar raha hai bhai?`);
-        return;
-      }
-      if (update.message.reply_to_message.from.is_bot) {
-        await sendMessage(`${EMOJIS.error} Bot pe goli nahi chalti.`);
-        return;
-      }
-
-      await DB_MANAGER.ensureUserExists(env.DB, targetId);
-
-      const caller = await DB_MANAGER.getUser(env.DB, userId);
-      if (!caller || caller.is_alive === 0) {
-        await sendMessage(`${EMOJIS.dead} Tu pehle hi mar chuka hai! Use /revive first.`);
-        return;
-      }
-
-      const target = await DB_MANAGER.getUser(env.DB, targetId);
-      if (!target || target.is_alive === 0) {
-        await sendMessage(`${EMOJIS.error} <b>${targetName}</b> pehle se mara hua hai.`);
-        return;
-      }
-
-      // 🛡️ SHIELD CHECK FOR KILL
-      const currentSeconds = Math.floor(Date.now() / 1000);
-      if (target.protection_until && target.protection_until > currentSeconds) {
-        await sendMessage(`${UI.BORDER_TOP}\n│ 🛡️ <b>A T T A C K   B L O C K E D</b>\n${UI.BORDER_BOT}\n\n${EMOJIS.error} <b>${targetName}</b> is under Underworld Protection!\nGuard dogs chased you away.`);
-        return;
-      }
-
-      // The 50/50 RNG Math
-      const roll = Math.floor(Math.random() * 100) + 1;
-
-      if (roll <= 50) { // Success
-        await DB_MANAGER.setAliveStatus(env.DB, targetId, 0); // Target Dead
-        await DB_MANAGER.addKill(env.DB, userId); // +1 Kill
-
-        // Loot Item
-        const STANDARD_DROPS = ["cheap_watch", "stolen_phone", "gold_chain"];
-        const dropItem = STANDARD_DROPS[Math.floor(Math.random() * STANDARD_DROPS.length)];
+    // ╭━━━━━━━━━━━━━━━✪ [AMMO SHOP FEATURE]
+    const ammoMatch = text.match(/^\/(b|bullets|buy)[\s]*(\d+)/i);
+    if (ammoMatch) {
+      const bulletsToBuy = parseInt(ammoMatch[2], 10);
+      if (bulletsToBuy > 0) {
+        const user = await DB_MANAGER.getUser(env.DB, userId);
+        if (!user) return;
+        const cost = bulletsToBuy * 1; // ₹1 per bullet
         
-        await DB_MANAGER.addInventoryItem(env.DB, userId, dropItem, 1);
+        if (user.balance < cost) {
+          await sendMessage(chatId, `❌ You need ₹${cost} to buy ${bulletsToBuy} bullets.\nYour Balance: ₹${user.balance}`);
+          return;
+        }
+        
+        await env.DB.prepare(`UPDATE users SET balance = balance - ?, ammo = ammo + ? WHERE user_id = ?`).bind(cost, bulletsToBuy, userId).run();
+        await sendMessage(chatId, `🛒 <b>AMMO SECURED!</b>\n\nBought <b>${bulletsToBuy}</b> bullets for ₹${cost}.\nTotal Ammo: <b>${(user as any).ammo + bulletsToBuy || bulletsToBuy}</b>`);
+        return;
+      }
+    }
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
-        const itemDisplay = MARKET_ITEMS[dropItem]?.name.toUpperCase() || dropItem.toUpperCase();
-        const dropEmoji = MARKET_ITEMS[dropItem]?.emoji || "📦";
+    // ====================================================
+    // ╭━━━━━━━━━━━━━━━✪ [THE FIRE / HITMAN MECHANIC]
+    if (text.startsWith("/fire") || text.startsWith("/f ")) {
+      const now = Math.floor(Date.now() / 1000);
+      const tgShooter = update.message.from;
+      const messageId = update.message.message_id;
+      const replyTo = update.message.reply_to_message;
 
-        await sendMessage(`${EMOJIS.gun} <b>BRUTAL MURDER!</b>\n<b>${firstName}</b> eliminated <b>${targetName}</b> in cold blood!\n${EMOJIS.vault} Searched the body and found a <b>[${dropEmoji} ${itemDisplay}]</b>!`);
-      } else { // Miss
-        await sendMessage(`💨 <b>WEAPON JAMMED!</b>\n<b>${firstName}</b> aimed at <b>${targetName}</b> but missed the shot!\n🏃 The target escaped unharmed.`);
+      // 1. Parse Target (Reply gets priority)
+      const cleanText = text.replace(/^\/fire(?:@\S+)?/i, "").replace(/^\/f(?:@\S+)?/i, "").trim();
+      const parsedId = parseInt(cleanText, 10);
+      let targetId: number | null = null;
+      let targetDisplay = "";
+
+      if (replyTo && replyTo.from) {
+        targetId = replyTo.from.id;
+        targetDisplay = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name;
+      } else if (!isNaN(parsedId) && parsedId > 0) {
+        targetId = parsedId;
+        targetDisplay = `ID: <code>${parsedId}</code>`;
+      } else {
+        await sendMessage(chatId, "❌ <b>Usage:</b> <code>/fire [id]</code>\nOr reply to a user's message with <code>/fire</code>.");
+        return;
+      }
+
+      if (targetId === tgShooter.id) {
+        await sendMessage(chatId, "❌ You cannot shoot yourself, Boss.");
+        return;
+      }
+
+      // 2. Fetch Shooter & Initialize if needed
+      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`).bind(tgShooter.id).run();
+      const shooter = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(tgShooter.id).first<any>();
+
+      // 3. Anti-Spam Gate
+      if (shooter.fire_lock_until > now) {
+        const remaining = shooter.fire_lock_until - now;
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        await sendMessage(chatId, `🔒 <b>LOCKED OUT!</b>\nYou spammed /fire too fast. Wait <b>${mins}m ${secs}s</b>.`);
+        return;
+      }
+
+      const timeSinceLast = now - shooter.last_fire_time;
+      if (timeSinceLast < 2) { // 2 Second Cooldown
+        const newStrikes = shooter.fire_spam_strikes + 1;
+        if (newStrikes >= 4) {
+          const lockUntil = now + 240; // 4 Minutes
+          await env.DB.prepare(`UPDATE users SET fire_spam_strikes = 0, fire_lock_until = ? WHERE user_id = ?`).bind(lockUntil, tgShooter.id).run();
+          await sendMessage(chatId, `⛔ <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. Banned from shooting for 4 minutes.`);
+        } else {
+          await env.DB.prepare(`UPDATE users SET fire_spam_strikes = ? WHERE user_id = ?`).bind(newStrikes, tgShooter.id).run();
+          await sendMessage(chatId, `⚠️ <b>Slow down!</b> Strike <b>${newStrikes}/4</b>. Hit 4 and your gun jams for 4 minutes.`);
+        }
+        return;
+      }
+
+      // Update active time safely
+      await env.DB.prepare(`UPDATE users SET fire_spam_strikes = 0, last_fire_time = ? WHERE user_id = ?`).bind(now, tgShooter.id).run();
+
+      // 4. Ammo Check
+      if (shooter.ammo < 1) {
+        await sendMessage(chatId, "❌ <b>OUT OF AMMO!</b>\nBuy bullets using <code>/b 10</code> or <code>/bullets 20</code>.");
+        return;
+      }
+
+      // 5. Fetch Target
+      const targetDb = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
+      if (!targetDb) {
+        await sendMessage(chatId, "❌ Target not found in the Underworld database.");
+        return;
+      }
+
+      // 6. Shield Check (Refunds ammo because they couldn't penetrate the shield)
+      if (targetDb.protection_until && targetDb.protection_until > now) {
+        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\nYour shot bounced off ${targetDisplay}'s protection field.\n<i>(Bullet refunded)</i>`);
+        return;
+      }
+
+      // 7. Dead Target Check (Wastes the bullet, 0 payout)
+      if (targetDb.is_alive === 0) {
+        await env.DB.prepare(`UPDATE users SET ammo = ammo - 1 WHERE user_id = ?`).bind(tgShooter.id).run();
+        await sendMessage(chatId, `💀 <b>WASTED AMMO!</b>\n${targetDisplay} is already dead. You just shot a corpse and lost 1 bullet.`);
+        return;
+      }
+
+      // 8. The RNG & Economy Action (95 / 5)
+      const roll = Math.random() * 100;
+
+      if (roll <= 95) {
+        // SUCCESS (95%)
+        const reward = Math.floor(Math.random() * (600 - 400 + 1)) + 400; // Random between 400 and 600
+        
+        // 10% Loot Drop Chance
+        const lootRoll = Math.random() < 0.10;
+        const lootText = lootRoll ? "\n\n📦 <b>SECRET LOOT CRATE DROPPED!</b> <i>(Added to your vault)</i>" : "";
+        if (lootRoll) {
+           await DB_MANAGER.addInventoryItem(env.DB, tgShooter.id, "gold_chain", 1); // Gives them a gold chain if it hits
+        }
+
+        await env.DB.batch([
+          env.DB.prepare(`UPDATE users SET is_alive = 0 WHERE user_id = ?`).bind(targetId),
+          env.DB.prepare(`UPDATE users SET balance = balance + ?, ammo = ammo - 1, kills = kills + 1 WHERE user_id = ?`).bind(reward, tgShooter.id)
+        ]);
+
+        await sendMessage(chatId, `💥 <b>TARGET ELIMINATED!</b>\n\n<blockquote>${tgShooter.first_name} fired a clean shot at ${targetDisplay}.\n\n💰 <b>Bounty Claimed:</b> ₹${reward}${lootText}</blockquote>`);
+      
+      } else {
+        // MISSFIRE (5%)
+        await env.DB.prepare(`UPDATE users SET ammo = ammo - 1 WHERE user_id = ?`).bind(tgShooter.id).run();
+        await sendMessage(chatId, `💨 <b>MISFIRE!</b>\n\n<blockquote>Your weapon jammed! ${targetDisplay} escaped.\n<i>(You lost 1 bullet)</i></blockquote>`);
       }
       return;
     }

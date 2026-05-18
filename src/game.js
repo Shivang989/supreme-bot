@@ -48,11 +48,11 @@ var config_1 = require("./config");
 exports.GAME = {
     // Ye main function hai jisme index.ts saare messages bhejega
     processCommand: function (update, env, sendMessage, startTime) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c;
         return __awaiter(this, void 0, void 0, function () {
-            var message, chatId, userId, firstName, session, currentTime, e_1, fileData, text, args, botUsername, replyMarkup, msg, user, status, profileText, currentTime_1, marketText, _i, _f, _g, itemKey, data, currentPrice, investment, user, result, netChange, newBalance, investText, invItems, invText, _h, invItems_1, row, itemData, emoji, nameDisplay, user, reviveCost, newBalance, msg, targetId, targetName, caller, target, currentSeconds, roll, STANDARD_DROPS, dropItem, itemDisplay, dropEmoji, now, tgRaider, messageId, replyTo, cleanText, parts, parsedAmount, parsedId, amount, targetId, targetDisplay, raider, remaining, mins, secs, timeSinceLast, newStrikes, lockUntil, targetDb, cappedAmount, roll, fivePercent, penalty, brokeMsg, totalGain, itemToSell_1, itemData, invItems, userItem, user, currentTime_2, sellPrice, topPlayers, lbText, rank, _j, topPlayers_1, p, medal, user, playerLevel, hit, bossDefense, raidText, reward, idText, replyId, replyName, latency, targetId, targetName, user, amount, targetId, targetName, target, newBalance, action, symbol, amount, targetId, targetName, sender, target, user, currentSeconds, remaining, plan, cost, days, newProtectionTime, e_2, adminData, isOwner, isHighAdmin, targetId, level, idArg, lvlArg, targetId, idArg, targetId, titleName, idArg, e_3, allAdmins, list, _k, allAdmins_1, a;
-            return __generator(this, function (_l) {
-                switch (_l.label) {
+            var message, chatId, userId, firstName, session, currentTime, e_1, fileData, text, args, botUsername, replyMarkup, msg, user, status, profileText, currentTime_1, marketText, _i, _d, _e, itemKey, data, currentPrice, investment, user, result, netChange, newBalance, investText, invItems, invText, _f, invItems_1, row, itemData, emoji, nameDisplay, user, reviveCost, newBalance, msg, ammoMatch, bulletsToBuy, user, cost, now, tgShooter, messageId, replyTo, cleanText, parsedId, targetId, targetDisplay, shooter, remaining, mins, secs, timeSinceLast, newStrikes, lockUntil, targetDb, roll, reward, lootRoll, lootText, now, tgRaider, messageId, replyTo, cleanText, parts, parsedAmount, parsedId, amount, targetId, targetDisplay, raider, remaining, mins, secs, timeSinceLast, newStrikes, lockUntil, targetDb, cappedAmount, roll, fivePercent, penalty, brokeMsg, totalGain, itemToSell_1, itemData, invItems, userItem, user, currentTime_2, sellPrice, topPlayers, lbText, rank, _g, topPlayers_1, p, medal, user, playerLevel, hit, bossDefense, raidText, reward, idText, replyId, replyName, latency, targetId, targetName, user, amount, targetId, targetName, target, newBalance, action, symbol, amount, targetId, targetName, sender, target, user, currentSeconds, remaining, plan, cost, days, newProtectionTime, e_2, adminData, isOwner, isHighAdmin, targetId, level, idArg, lvlArg, targetId, idArg, targetId, titleName, idArg, e_3, allAdmins, list, _h, allAdmins_1, a;
+            return __generator(this, function (_j) {
+                switch (_j.label) {
                     case 0:
                         message = update.message;
                         chatId = message.chat.id;
@@ -60,31 +60,31 @@ exports.GAME = {
                         firstName = message.from.first_name || "Agent";
                         return [4 /*yield*/, db_1.DB_MANAGER.getSession(env.DB, userId)];
                     case 1:
-                        session = _l.sent();
+                        session = _j.sent();
                         currentTime = Math.floor(Date.now() / 1000);
                         if (!(session && session.expires_at > currentTime)) return [3 /*break*/, 16];
                         if (!(session.step === 'awaiting_text' && message.text)) return [3 /*break*/, 9];
                         return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_text', message.text)];
                     case 2:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.setSession(env.DB, userId, session.chat_id, 'awaiting_media', currentTime + 1800)];
                     case 3:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "✅ <b>Text Saved!</b>\nNow send the Media (Photo, Video under 15s, or Sticker).\n<i>Send 'skip' if you only want text.</i>")];
                     case 4:
-                        _l.sent();
-                        _l.label = 5;
+                        _j.sent();
+                        _j.label = 5;
                     case 5:
-                        _l.trys.push([5, 7, , 8]);
+                        _j.trys.push([5, 7, , 8]);
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/deleteMessage"), {
                                 method: "POST", headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, message_id: message.message_id })
                             })];
                     case 6:
-                        _l.sent();
+                        _j.sent();
                         return [3 /*break*/, 8];
                     case 7:
-                        e_1 = _l.sent();
+                        e_1 = _j.sent();
                         return [3 /*break*/, 8];
                     case 8: // Ignore if bot lacks admin rights to delete
                     return [2 /*return*/];
@@ -105,31 +105,31 @@ exports.GAME = {
                         if (!fileData) return [3 /*break*/, 13];
                         return [4 /*yield*/, db_1.DB_MANAGER.updateGroupSetting(env.DB, session.chat_id, 'welcome_media_id', fileData)];
                     case 10:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.clearSession(env.DB, userId)];
                     case 11:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "🎉 <b>Welcome Setup Complete!</b>\nUse the 'See' button in settings to test it.")];
                     case 12:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 13: return [4 /*yield*/, sendMessage(chatId, "❌ Invalid media. Send a Photo, Video, GIF, Sticker, or type 'skip'.")];
                     case 14:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 15: return [3 /*break*/, 18];
                     case 16:
                         if (!(session && session.expires_at <= currentTime)) return [3 /*break*/, 18];
                         return [4 /*yield*/, db_1.DB_MANAGER.clearSession(env.DB, userId)];
                     case 17:
-                        _l.sent(); // Cleanup expired session
-                        _l.label = 18;
+                        _j.sent(); // Cleanup expired session
+                        _j.label = 18;
                     case 18:
                         text = message.text ? message.text.trim() : "";
                         args = text.split(" ").slice(1);
                         return [4 /*yield*/, db_1.DB_MANAGER.ensureUserExists(env.DB, userId)];
                     case 19:
-                        _l.sent();
+                        _j.sent();
                         if (!text.startsWith("/start")) return [3 /*break*/, 21];
                         botUsername = "T_he_Main_Bot";
                         replyMarkup = {
@@ -141,57 +141,57 @@ exports.GAME = {
                         msg = "\uD83D\uDC51 <b>THE UNDERWORLD TERMINAL</b>\n\n<blockquote><b>Welcome back, ".concat(firstName, ".</b>\nConnection established. All systems are green. Select a option below to begin.</blockquote>");
                         return [4 /*yield*/, sendMessage(chatId, msg, replyMarkup)];
                     case 20:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 21:
                         if (!(text.startsWith("/profile") || text.startsWith("/me"))) return [3 /*break*/, 24];
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
                     case 22:
-                        user = _l.sent();
+                        user = _j.sent();
                         if (!user)
                             return [2 /*return*/];
                         status = user.is_alive === 1 ? "".concat(config_1.EMOJIS.alive, " Alive") : "".concat(config_1.EMOJIS.dead, " Dead");
                         profileText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCB3 <b>U N D E R W O R L D   I D</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n\uD83D\uDC64 <b>Name:</b> ").concat(firstName, "\n\uD83C\uDD94 <b>Citizen ID:</b> <code>").concat(userId, "</code>\n\uD83D\uDCB0 <b>Net Worth:</b> \u20B9").concat(user.balance, "\n\uD83D\uDD2A <b>Total Kills:</b> ").concat(user.kills, "\n\u2764\uFE0F <b>Status:</b> ").concat(status, "\n\n").concat(config_1.UI.BORDER_BOT);
                         return [4 /*yield*/, sendMessage(profileText)];
                     case 23:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 24:
                         if (!text.startsWith("/market")) return [3 /*break*/, 26];
                         currentTime_1 = Math.floor(Date.now() / 1000);
                         marketText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCC8 <b>\uD835\uDC14\uD835\uDC0D\uD835\uDC03\uD835\uDC04\uD835\uDC11\uD835\uDC16\uD835\uDC0E\uD835\uDC11\uD835\uDC0B\uD835\uDC03 \uD835\uDC0C\uD835\uDC00\uD835\uDC11\uD835\uDC0A\uD835\uDC04\uD835\uDC13</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         // CONFIG se items uthayenge aur MUSCLE se price calculate karwayenge
-                        for (_i = 0, _f = Object.entries(config_1.MARKET_ITEMS); _i < _f.length; _i++) {
-                            _g = _f[_i], itemKey = _g[0], data = _g[1];
+                        for (_i = 0, _d = Object.entries(config_1.MARKET_ITEMS); _i < _d.length; _i++) {
+                            _e = _d[_i], itemKey = _e[0], data = _e[1];
                             currentPrice = muscle_1.MUSCLE.calculateMarketPrice(data.base_price, data.volatility, currentTime_1);
                             marketText += "\u256D\u2501\u27EE \u2726 ".concat(data.emoji, " ").concat(data.name.toUpperCase(), " \u2726 \u27EF\n\u2502 \uD83D\uDCB0 \uD835\uDC02\uD835\uDC14\uD835\uDC11\uD835\uDC11\uD835\uDC04\uD835\uDC0D\uD835\uDC13 \uD835\uDC0F\uD835\uDC11\uD835\uDC08\uD835\uDC02\uD835\uDC04: \u20B9").concat(currentPrice, "\n").concat(config_1.UI.BORDER_BOT, "\n");
                         }
                         marketText += "\n\uD83D\uDCA1 <i>Prices fluctuate based on the Supreme Engine!</i>";
                         return [4 /*yield*/, sendMessage(marketText)];
                     case 25:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 26:
                         if (!text.startsWith("/invest")) return [3 /*break*/, 36];
                         if (!(args.length === 0)) return [3 /*break*/, 28];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>Usage:</b> <code>/invest [amount]</code>"))];
                     case 27:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 28:
                         investment = parseInt(args[0]);
                         if (!(isNaN(investment) || investment <= 0)) return [3 /*break*/, 30];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Sahi amount daal bhai."))];
                     case 29:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 30: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
                     case 31:
-                        user = _l.sent();
+                        user = _j.sent();
                         if (!(!user || user.balance < investment)) return [3 /*break*/, 33];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " You don't have enough funds. Balance: \u20B9").concat((user === null || user === void 0 ? void 0 : user.balance) || 0, "."))];
                     case 32:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 33:
                         result = muscle_1.MUSCLE.simulateMarket(investment);
@@ -201,7 +201,7 @@ exports.GAME = {
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, newBalance)];
                     case 34:
                         // The Clinic updates the Database
-                        _l.sent();
+                        _j.sent();
                         investText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCCA <b>T R A D I N G   T E R M I N A L</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         investText += "\uD83D\uDCBC <b>Investment:</b> \u20B9".concat(investment, "\n\uD83D\uDCE1 <b>Executing Algorithm...</b>\n\n");
                         investText += "\u256D\u2501\u27EE ".concat(result.emoji, " <b>").concat(result.event, "</b> \u27EF\n\u2502 \u2716\uFE0F <b>Multiplier:</b> ").concat(result.multiplier, "x\n");
@@ -214,20 +214,20 @@ exports.GAME = {
                         investText += "\u2502 \uD83C\uDFE6 <b>New Balance:</b> \u20B9".concat(newBalance, "\n").concat(config_1.UI.BORDER_BOT);
                         return [4 /*yield*/, sendMessage(investText)];
                     case 35:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 36:
                         if (!text.startsWith("/inv")) return [3 /*break*/, 39];
                         return [4 /*yield*/, db_1.DB_MANAGER.getInventory(env.DB, userId)];
                     case 37:
-                        invItems = _l.sent();
+                        invItems = _j.sent();
                         invText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 ").concat(config_1.EMOJIS.vault, " <b>").concat(firstName.toUpperCase(), "'\uD835\uDC12 \uD835\uDC15\uD835\uDC00\uD835\uDC14\uD835\uDC0B\uD835\uDC13</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         if (!invItems || invItems.length === 0) {
                             invText += "".concat(config_1.EMOJIS.error, " <i>Vault is empty. Kill someone to get loot.</i>\n\n").concat(config_1.UI.BORDER_BOT);
                         }
                         else {
-                            for (_h = 0, invItems_1 = invItems; _h < invItems_1.length; _h++) {
-                                row = invItems_1[_h];
+                            for (_f = 0, invItems_1 = invItems; _f < invItems_1.length; _f++) {
+                                row = invItems_1[_f];
                                 itemData = config_1.MARKET_ITEMS[row.item_name];
                                 emoji = (itemData === null || itemData === void 0 ? void 0 : itemData.emoji) || "📦";
                                 nameDisplay = (itemData === null || itemData === void 0 ? void 0 : itemData.name.toUpperCase()) || row.item_name.toUpperCase();
@@ -236,19 +236,19 @@ exports.GAME = {
                         }
                         return [4 /*yield*/, sendMessage(invText)];
                     case 38:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 39:
                         if (!(text === "/revive" || text === "/heal")) return [3 /*break*/, 46];
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
                     case 40:
-                        user = _l.sent();
+                        user = _j.sent();
                         if (!user)
                             return [2 /*return*/];
                         if (!(user.is_alive === 1)) return [3 /*break*/, 42];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Tu pehle se zinda hai bhai. Jakar aish kar!"))];
                     case 41:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 42:
                         reviveCost = 500;
@@ -264,89 +264,172 @@ exports.GAME = {
                         }
                         return [4 /*yield*/, db_1.DB_MANAGER.setAliveStatus(env.DB, userId, 1)];
                     case 43:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, newBalance)];
                     case 44:
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDFE2 <b>R E S U R R E C T I O N</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(msg, "\n\nWelcome back to the land of the living, ").concat(firstName, "!"))];
                     case 45:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
                     case 46:
-                        if (!(text.startsWith("/kill") || text.startsWith("/k "))) return [3 /*break*/, 69];
-                        if (!!update.message.reply_to_message) return [3 /*break*/, 48];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Kisko tapkana hai? Reply to a player."))];
-                    case 47:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 48:
-                        targetId = update.message.reply_to_message.from.id;
-                        targetName = update.message.reply_to_message.from.first_name || "Agent";
-                        if (!(userId === targetId)) return [3 /*break*/, 50];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Khud ko kyu maar raha hai bhai?"))];
-                    case 49:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 50:
-                        if (!update.message.reply_to_message.from.is_bot) return [3 /*break*/, 52];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Bot pe goli nahi chalti."))];
-                    case 51:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 52: return [4 /*yield*/, db_1.DB_MANAGER.ensureUserExists(env.DB, targetId)];
-                    case 53:
-                        _l.sent();
+                        ammoMatch = text.match(/^\/(b|bullets|buy)[\s]*(\d+)/i);
+                        if (!ammoMatch) return [3 /*break*/, 52];
+                        bulletsToBuy = parseInt(ammoMatch[2], 10);
+                        if (!(bulletsToBuy > 0)) return [3 /*break*/, 52];
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
-                    case 54:
-                        caller = _l.sent();
-                        if (!(!caller || caller.is_alive === 0)) return [3 /*break*/, 56];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.dead, " Tu pehle hi mar chuka hai! Use /revive first."))];
+                    case 47:
+                        user = _j.sent();
+                        if (!user)
+                            return [2 /*return*/];
+                        cost = bulletsToBuy * 1;
+                        if (!(user.balance < cost)) return [3 /*break*/, 49];
+                        return [4 /*yield*/, sendMessage(chatId, "\u274C You need \u20B9".concat(cost, " to buy ").concat(bulletsToBuy, " bullets.\nYour Balance: \u20B9").concat(user.balance))];
+                    case 48:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 49: return [4 /*yield*/, env.DB.prepare("UPDATE users SET balance = balance - ?, ammo = ammo + ? WHERE user_id = ?").bind(cost, bulletsToBuy, userId).run()];
+                    case 50:
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDED2 <b>AMMO SECURED!</b>\n\nBought <b>".concat(bulletsToBuy, "</b> bullets for \u20B9").concat(cost, ".\nTotal Ammo: <b>").concat(user.ammo + bulletsToBuy || bulletsToBuy, "</b>"))];
+                    case 51:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 52:
+                        if (!(text.startsWith("/fire") || text.startsWith("/f "))) return [3 /*break*/, 89];
+                        now = Math.floor(Date.now() / 1000);
+                        tgShooter = update.message.from;
+                        messageId = update.message.message_id;
+                        replyTo = update.message.reply_to_message;
+                        cleanText = text.replace(/^\/fire(?:@\S+)?/i, "").replace(/^\/f(?:@\S+)?/i, "").trim();
+                        parsedId = parseInt(cleanText, 10);
+                        targetId = null;
+                        targetDisplay = "";
+                        if (!(replyTo && replyTo.from)) return [3 /*break*/, 53];
+                        targetId = replyTo.from.id;
+                        targetDisplay = replyTo.from.username ? "@".concat(replyTo.from.username) : replyTo.from.first_name;
+                        return [3 /*break*/, 56];
+                    case 53:
+                        if (!(!isNaN(parsedId) && parsedId > 0)) return [3 /*break*/, 54];
+                        targetId = parsedId;
+                        targetDisplay = "ID: <code>".concat(parsedId, "</code>");
+                        return [3 /*break*/, 56];
+                    case 54: return [4 /*yield*/, sendMessage(chatId, "❌ <b>Usage:</b> <code>/fire [id]</code>\nOr reply to a user's message with <code>/fire</code>.")];
                     case 55:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
-                    case 56: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, targetId)];
+                    case 56:
+                        if (!(targetId === tgShooter.id)) return [3 /*break*/, 58];
+                        return [4 /*yield*/, sendMessage(chatId, "❌ You cannot shoot yourself, Boss.")];
                     case 57:
-                        target = _l.sent();
-                        if (!(!target || target.is_alive === 0)) return [3 /*break*/, 59];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>").concat(targetName, "</b> pehle se mara hua hai."))];
-                    case 58:
-                        _l.sent();
+                        _j.sent();
                         return [2 /*return*/];
+                    case 58: 
+                    // 2. Fetch Shooter & Initialize if needed
+                    return [4 /*yield*/, env.DB.prepare("INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) VALUES (?, 1000, 1, 0, 0, 0, 0, 0)").bind(tgShooter.id).run()];
                     case 59:
-                        currentSeconds = Math.floor(Date.now() / 1000);
-                        if (!(target.protection_until && target.protection_until > currentSeconds)) return [3 /*break*/, 61];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDEE1\uFE0F <b>A T T A C K   B L O C K E D</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(config_1.EMOJIS.error, " <b>").concat(targetName, "</b> is under Underworld Protection!\nGuard dogs chased you away."))];
+                        // 2. Fetch Shooter & Initialize if needed
+                        _j.sent();
+                        return [4 /*yield*/, env.DB.prepare("SELECT * FROM users WHERE user_id = ? LIMIT 1").bind(tgShooter.id).first()];
                     case 60:
-                        _l.sent();
-                        return [2 /*return*/];
+                        shooter = _j.sent();
+                        if (!(shooter.fire_lock_until > now)) return [3 /*break*/, 62];
+                        remaining = shooter.fire_lock_until - now;
+                        mins = Math.floor(remaining / 60);
+                        secs = remaining % 60;
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDD12 <b>LOCKED OUT!</b>\nYou spammed /fire too fast. Wait <b>".concat(mins, "m ").concat(secs, "s</b>."))];
                     case 61:
-                        roll = Math.floor(Math.random() * 100) + 1;
-                        if (!(roll <= 50)) return [3 /*break*/, 66];
-                        return [4 /*yield*/, db_1.DB_MANAGER.setAliveStatus(env.DB, targetId, 0)];
+                        _j.sent();
+                        return [2 /*return*/];
                     case 62:
-                        _l.sent(); // Target Dead
-                        return [4 /*yield*/, db_1.DB_MANAGER.addKill(env.DB, userId)];
+                        timeSinceLast = now - shooter.last_fire_time;
+                        if (!(timeSinceLast < 2)) return [3 /*break*/, 69];
+                        newStrikes = shooter.fire_spam_strikes + 1;
+                        if (!(newStrikes >= 4)) return [3 /*break*/, 65];
+                        lockUntil = now + 240;
+                        return [4 /*yield*/, env.DB.prepare("UPDATE users SET fire_spam_strikes = 0, fire_lock_until = ? WHERE user_id = ?").bind(lockUntil, tgShooter.id).run()];
                     case 63:
-                        _l.sent(); // +1 Kill
-                        STANDARD_DROPS = ["cheap_watch", "stolen_phone", "gold_chain"];
-                        dropItem = STANDARD_DROPS[Math.floor(Math.random() * STANDARD_DROPS.length)];
-                        return [4 /*yield*/, db_1.DB_MANAGER.addInventoryItem(env.DB, userId, dropItem, 1)];
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\u26D4 <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. Banned from shooting for 4 minutes.")];
                     case 64:
-                        _l.sent();
-                        itemDisplay = ((_a = config_1.MARKET_ITEMS[dropItem]) === null || _a === void 0 ? void 0 : _a.name.toUpperCase()) || dropItem.toUpperCase();
-                        dropEmoji = ((_b = config_1.MARKET_ITEMS[dropItem]) === null || _b === void 0 ? void 0 : _b.emoji) || "📦";
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.gun, " <b>BRUTAL MURDER!</b>\n<b>").concat(firstName, "</b> eliminated <b>").concat(targetName, "</b> in cold blood!\n").concat(config_1.EMOJIS.vault, " Searched the body and found a <b>[").concat(dropEmoji, " ").concat(itemDisplay, "]</b>!"))];
-                    case 65:
-                        _l.sent();
+                        _j.sent();
                         return [3 /*break*/, 68];
-                    case 66: // Miss
-                    return [4 /*yield*/, sendMessage("\uD83D\uDCA8 <b>WEAPON JAMMED!</b>\n<b>".concat(firstName, "</b> aimed at <b>").concat(targetName, "</b> but missed the shot!\n\uD83C\uDFC3 The target escaped unharmed."))];
+                    case 65: return [4 /*yield*/, env.DB.prepare("UPDATE users SET fire_spam_strikes = ? WHERE user_id = ?").bind(newStrikes, tgShooter.id).run()];
+                    case 66:
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\u26A0\uFE0F <b>Slow down!</b> Strike <b>".concat(newStrikes, "/4</b>. Hit 4 and your gun jams for 4 minutes."))];
                     case 67:
-                        _l.sent();
-                        _l.label = 68;
+                        _j.sent();
+                        _j.label = 68;
                     case 68: return [2 /*return*/];
-                    case 69:
-                        if (!text.startsWith("/rob")) return [3 /*break*/, 102];
+                    case 69: 
+                    // Update active time safely
+                    return [4 /*yield*/, env.DB.prepare("UPDATE users SET fire_spam_strikes = 0, last_fire_time = ? WHERE user_id = ?").bind(now, tgShooter.id).run()];
+                    case 70:
+                        // Update active time safely
+                        _j.sent();
+                        if (!(shooter.ammo < 1)) return [3 /*break*/, 72];
+                        return [4 /*yield*/, sendMessage(chatId, "❌ <b>OUT OF AMMO!</b>\nBuy bullets using <code>/b 10</code> or <code>/bullets 20</code>.")];
+                    case 71:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 72: return [4 /*yield*/, env.DB.prepare("SELECT * FROM users WHERE user_id = ? LIMIT 1").bind(targetId).first()];
+                    case 73:
+                        targetDb = _j.sent();
+                        if (!!targetDb) return [3 /*break*/, 75];
+                        return [4 /*yield*/, sendMessage(chatId, "❌ Target not found in the Underworld database.")];
+                    case 74:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 75:
+                        if (!(targetDb.protection_until && targetDb.protection_until > now)) return [3 /*break*/, 77];
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDEE1\uFE0F <b>TARGET SHIELDED!</b>\nYour shot bounced off ".concat(targetDisplay, "'s protection field.\n<i>(Bullet refunded)</i>"))];
+                    case 76:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 77:
+                        if (!(targetDb.is_alive === 0)) return [3 /*break*/, 80];
+                        return [4 /*yield*/, env.DB.prepare("UPDATE users SET ammo = ammo - 1 WHERE user_id = ?").bind(tgShooter.id).run()];
+                    case 78:
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDC80 <b>WASTED AMMO!</b>\n".concat(targetDisplay, " is already dead. You just shot a corpse and lost 1 bullet."))];
+                    case 79:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 80:
+                        roll = Math.random() * 100;
+                        if (!(roll <= 95)) return [3 /*break*/, 85];
+                        reward = Math.floor(Math.random() * (600 - 400 + 1)) + 400;
+                        lootRoll = Math.random() < 0.10;
+                        lootText = lootRoll ? "\n\n📦 <b>SECRET LOOT CRATE DROPPED!</b> <i>(Added to your vault)</i>" : "";
+                        if (!lootRoll) return [3 /*break*/, 82];
+                        return [4 /*yield*/, db_1.DB_MANAGER.addInventoryItem(env.DB, tgShooter.id, "gold_chain", 1)];
+                    case 81:
+                        _j.sent(); // Gives them a gold chain if it hits
+                        _j.label = 82;
+                    case 82: return [4 /*yield*/, env.DB.batch([
+                            env.DB.prepare("UPDATE users SET is_alive = 0 WHERE user_id = ?").bind(targetId),
+                            env.DB.prepare("UPDATE users SET balance = balance + ?, ammo = ammo - 1, kills = kills + 1 WHERE user_id = ?").bind(reward, tgShooter.id)
+                        ])];
+                    case 83:
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDCA5 <b>TARGET ELIMINATED!</b>\n\n<blockquote>".concat(tgShooter.first_name, " fired a clean shot at ").concat(targetDisplay, ".\n\n\uD83D\uDCB0 <b>Bounty Claimed:</b> \u20B9").concat(reward).concat(lootText, "</blockquote>"))];
+                    case 84:
+                        _j.sent();
+                        return [3 /*break*/, 88];
+                    case 85: 
+                    // MISSFIRE (5%)
+                    return [4 /*yield*/, env.DB.prepare("UPDATE users SET ammo = ammo - 1 WHERE user_id = ?").bind(tgShooter.id).run()];
+                    case 86:
+                        // MISSFIRE (5%)
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDCA8 <b>MISFIRE!</b>\n\n<blockquote>Your weapon jammed! ".concat(targetDisplay, " escaped.\n<i>(You lost 1 bullet)</i></blockquote>"))];
+                    case 87:
+                        _j.sent();
+                        _j.label = 88;
+                    case 88: return [2 /*return*/];
+                    case 89:
+                        if (!text.startsWith("/rob")) return [3 /*break*/, 122];
                         now = Math.floor(Date.now() / 1000);
                         tgRaider = update.message.from;
                         messageId = update.message.message_id;
@@ -358,180 +441,180 @@ exports.GAME = {
                         amount = (!isNaN(parsedAmount) && parsedAmount > 0) ? parsedAmount : 500;
                         targetId = null;
                         targetDisplay = "";
-                        if (!(replyTo && replyTo.from)) return [3 /*break*/, 70];
+                        if (!(replyTo && replyTo.from)) return [3 /*break*/, 90];
                         targetId = replyTo.from.id;
                         targetDisplay = replyTo.from.username ? "@".concat(replyTo.from.username) : replyTo.from.first_name;
-                        return [3 /*break*/, 73];
-                    case 70:
-                        if (!(!isNaN(parsedId) && parsedId > 0)) return [3 /*break*/, 71];
+                        return [3 /*break*/, 93];
+                    case 90:
+                        if (!(!isNaN(parsedId) && parsedId > 0)) return [3 /*break*/, 91];
                         targetId = parsedId;
                         targetDisplay = "ID: <code>".concat(parsedId, "</code>");
-                        return [3 /*break*/, 73];
-                    case 71: return [4 /*yield*/, sendMessage(chatId, "❌ <b>Usage:</b> <code>/rob [amount] [id]</code>\nOr reply to a user's message with <code>/rob [amount]</code>.")];
-                    case 72:
-                        _l.sent();
+                        return [3 /*break*/, 93];
+                    case 91: return [4 /*yield*/, sendMessage(chatId, "❌ <b>Usage:</b> <code>/rob [amount] [id]</code>\nOr reply to a user's message with <code>/rob [amount]</code>.")];
+                    case 92:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 73:
-                        if (!(targetId === tgRaider.id)) return [3 /*break*/, 75];
+                    case 93:
+                        if (!(targetId === tgRaider.id)) return [3 /*break*/, 95];
                         return [4 /*yield*/, sendMessage(chatId, "❌ You cannot rob yourself.")];
-                    case 74:
-                        _l.sent();
+                    case 94:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 75: 
+                    case 95: 
                     // 2. Fetch/Upsert Raider
                     return [4 /*yield*/, env.DB.prepare("INSERT OR IGNORE INTO users (user_id, balance, last_raid_time, raid_spam_strikes, raid_lock_until) VALUES (?, 0, 0, 0, 0)").bind(tgRaider.id).run()];
-                    case 76:
+                    case 96:
                         // 2. Fetch/Upsert Raider
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, env.DB.prepare("SELECT * FROM users WHERE user_id = ? LIMIT 1").bind(tgRaider.id).first()];
-                    case 77:
-                        raider = _l.sent();
-                        if (!(raider.raid_lock_until > now)) return [3 /*break*/, 79];
+                    case 97:
+                        raider = _j.sent();
+                        if (!(raider.raid_lock_until > now)) return [3 /*break*/, 99];
                         remaining = raider.raid_lock_until - now;
                         mins = Math.floor(remaining / 60);
                         secs = remaining % 60;
                         return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDD12 <b>LOCKED OUT!</b>\nYou spammed /rob too fast. Wait <b>".concat(mins, "m ").concat(secs, "s</b>."))];
-                    case 78:
-                        _l.sent();
+                    case 98:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 79:
+                    case 99:
                         timeSinceLast = now - raider.last_raid_time;
-                        if (!(timeSinceLast < 2)) return [3 /*break*/, 86];
+                        if (!(timeSinceLast < 2)) return [3 /*break*/, 106];
                         newStrikes = raider.raid_spam_strikes + 1;
-                        if (!(newStrikes >= 4)) return [3 /*break*/, 82];
+                        if (!(newStrikes >= 4)) return [3 /*break*/, 102];
                         lockUntil = now + 240;
                         return [4 /*yield*/, env.DB.prepare("UPDATE users SET raid_spam_strikes = 0, raid_lock_until = ? WHERE user_id = ?").bind(lockUntil, tgRaider.id).run()];
-                    case 80:
-                        _l.sent();
+                    case 100:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "\u26D4 <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. You are banned from robbing for 4 minutes.")];
-                    case 81:
-                        _l.sent();
-                        return [3 /*break*/, 85];
-                    case 82: return [4 /*yield*/, env.DB.prepare("UPDATE users SET raid_spam_strikes = ? WHERE user_id = ?").bind(newStrikes, tgRaider.id).run()];
-                    case 83:
-                        _l.sent();
+                    case 101:
+                        _j.sent();
+                        return [3 /*break*/, 105];
+                    case 102: return [4 /*yield*/, env.DB.prepare("UPDATE users SET raid_spam_strikes = ? WHERE user_id = ?").bind(newStrikes, tgRaider.id).run()];
+                    case 103:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "\u26A0\uFE0F <b>Slow down!</b> Strike <b>".concat(newStrikes, "/4</b>. Hit 4 and you are locked out."))];
-                    case 84:
-                        _l.sent();
-                        _l.label = 85;
-                    case 85: return [2 /*return*/];
-                    case 86: 
+                    case 104:
+                        _j.sent();
+                        _j.label = 105;
+                    case 105: return [2 /*return*/];
+                    case 106: 
                     // Update last active time safely
                     return [4 /*yield*/, env.DB.prepare("UPDATE users SET raid_spam_strikes = 0, last_raid_time = ? WHERE user_id = ?").bind(now, tgRaider.id).run()];
-                    case 87:
+                    case 107:
                         // Update last active time safely
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, env.DB.prepare("SELECT balance FROM users WHERE user_id = ? LIMIT 1").bind(targetId).first()];
-                    case 88:
-                        targetDb = _l.sent();
-                        if (!!targetDb) return [3 /*break*/, 90];
+                    case 108:
+                        targetDb = _j.sent();
+                        if (!!targetDb) return [3 /*break*/, 110];
                         return [4 /*yield*/, sendMessage(chatId, "❌ Target not found in the Underworld database.")];
-                    case 89:
-                        _l.sent();
+                    case 109:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 90:
-                        if (!(targetDb.balance < 100)) return [3 /*break*/, 92];
+                    case 110:
+                        if (!(targetDb.balance < 100)) return [3 /*break*/, 112];
                         return [4 /*yield*/, sendMessage(chatId, "\u274C <b>Target is too poor.</b> They only have \u20B9".concat(targetDb.balance, ". Not worth the risk."))];
-                    case 91:
-                        _l.sent();
+                    case 111:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 92:
+                    case 112:
                         cappedAmount = Math.min(amount, targetDb.balance);
                         roll = Math.random() * 100;
-                        if (!(roll < 90)) return [3 /*break*/, 95];
+                        if (!(roll < 90)) return [3 /*break*/, 115];
                         // SUCCESS (90%)
                         return [4 /*yield*/, env.DB.batch([
                                 env.DB.prepare("UPDATE users SET balance = balance - ? WHERE user_id = ?").bind(cappedAmount, targetId),
                                 env.DB.prepare("UPDATE users SET balance = balance + ? WHERE user_id = ?").bind(cappedAmount, tgRaider.id)
                             ])];
-                    case 93:
+                    case 113:
                         // SUCCESS (90%)
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "\uD83C\uDFAD <b>HEIST SUCCESSFUL!</b>\n\n<blockquote>".concat(tgRaider.first_name, " slipped into the shadows and stole <b>\u20B9").concat(cappedAmount, "</b> from ").concat(targetDisplay, ".\n<i>Clean exit. No witnesses.</i></blockquote>"))];
-                    case 94:
-                        _l.sent();
-                        return [3 /*break*/, 101];
-                    case 95:
-                        if (!(roll < 95)) return [3 /*break*/, 98];
+                    case 114:
+                        _j.sent();
+                        return [3 /*break*/, 121];
+                    case 115:
+                        if (!(roll < 95)) return [3 /*break*/, 118];
                         fivePercent = Math.floor(raider.balance * 0.05);
                         penalty = fivePercent >= 100 ? fivePercent : 100;
                         return [4 /*yield*/, env.DB.prepare("UPDATE users SET balance = balance - ? WHERE user_id = ?").bind(penalty, tgRaider.id).run()];
-                    case 96:
-                        _l.sent();
+                    case 116:
+                        _j.sent();
                         brokeMsg = raider.balance < 100 ? "\n<i>You were already broke. Your account is now in negative debt!</i>" : "";
                         return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDEA8 <b>BUSTED BY SECURITY!</b>\n\n<blockquote>".concat(tgRaider.first_name, " tripped the alarms trying to hit ").concat(targetDisplay, "!\n\n\uD83D\uDCB8 <b>Penalty:</b> \u20B9").concat(penalty, " burned to ash.").concat(brokeMsg, "</blockquote>"))];
-                    case 97:
-                        _l.sent();
-                        return [3 /*break*/, 101];
-                    case 98:
+                    case 117:
+                        _j.sent();
+                        return [3 /*break*/, 121];
+                    case 118:
                         totalGain = cappedAmount + 2000;
                         return [4 /*yield*/, env.DB.batch([
                                 env.DB.prepare("UPDATE users SET balance = balance - ? WHERE user_id = ?").bind(cappedAmount, targetId),
                                 env.DB.prepare("UPDATE users SET balance = balance + ? WHERE user_id = ?").bind(totalGain, tgRaider.id)
                             ])];
-                    case 99:
-                        _l.sent();
+                    case 119:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage(chatId, "\uD83D\uDC8E <b>JACKPOT HEIST!</b>\n\n<blockquote>".concat(tgRaider.first_name, " pulled off the raid of the century against ").concat(targetDisplay, "!\n\n\uD83D\uDCB0 Stolen: <b>\u20B9").concat(cappedAmount, "</b>\n\u2728 Bonus Minted: <b>\u20B92000</b>\n\uD83C\uDFC6 Total Haul: <b>\u20B9").concat(totalGain, "</b></blockquote>"))];
-                    case 100:
-                        _l.sent();
-                        _l.label = 101;
-                    case 101: return [2 /*return*/];
-                    case 102:
-                        if (!text.startsWith("/sell")) return [3 /*break*/, 114];
-                        if (!(args.length === 0)) return [3 /*break*/, 104];
+                    case 120:
+                        _j.sent();
+                        _j.label = 121;
+                    case 121: return [2 /*return*/];
+                    case 122:
+                        if (!text.startsWith("/sell")) return [3 /*break*/, 134];
+                        if (!(args.length === 0)) return [3 /*break*/, 124];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Kya bechna hai? Usage: <code>/sell [item_name]</code>\nExample: <code>/sell stolen_phone</code>"))];
-                    case 103:
-                        _l.sent();
+                    case 123:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 104:
+                    case 124:
                         itemToSell_1 = args[0].toLowerCase();
                         itemData = config_1.MARKET_ITEMS[itemToSell_1];
-                        if (!!itemData) return [3 /*break*/, 106];
+                        if (!!itemData) return [3 /*break*/, 126];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Ye kachra Underworld market me nahi bikta."))];
-                    case 105:
-                        _l.sent();
+                    case 125:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 106: return [4 /*yield*/, db_1.DB_MANAGER.getInventory(env.DB, userId)];
-                    case 107:
-                        invItems = _l.sent();
+                    case 126: return [4 /*yield*/, db_1.DB_MANAGER.getInventory(env.DB, userId)];
+                    case 127:
+                        invItems = _j.sent();
                         userItem = invItems.find(function (i) { return i.item_name === itemToSell_1; });
-                        if (!(!userItem || userItem.quantity < 1)) return [3 /*break*/, 109];
+                        if (!(!userItem || userItem.quantity < 1)) return [3 /*break*/, 129];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Tere paas ye item nahi hai. Pehle /inv check kar."))];
-                    case 108:
-                        _l.sent();
+                    case 128:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 109: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
-                    case 110:
-                        user = _l.sent();
+                    case 129: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
+                    case 130:
+                        user = _j.sent();
                         if (!user)
                             return [2 /*return*/];
                         currentTime_2 = Math.floor(Date.now() / 1000);
                         sellPrice = muscle_1.MUSCLE.calculateMarketPrice(itemData.base_price, itemData.volatility, currentTime_2);
                         // Clinic updates (Remove 1 item, Add money)
                         return [4 /*yield*/, db_1.DB_MANAGER.addInventoryItem(env.DB, userId, itemToSell_1, -1)];
-                    case 111:
+                    case 131:
                         // Clinic updates (Remove 1 item, Add money)
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, user.balance + sellPrice)];
-                    case 112:
-                        _l.sent();
+                    case 132:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83E\uDD1D <b>D E A L   D O N E</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(config_1.EMOJIS.success, " <b>").concat(firstName, "</b> sold 1x <b>").concat(itemData.emoji, " ").concat(itemData.name.toUpperCase(), "</b>!\n\n\uD83D\uDCB0 <b>Earned:</b> \u20B9").concat(sellPrice, "\n\uD83C\uDFE6 <b>New Balance:</b> \u20B9").concat(user.balance + sellPrice))];
-                    case 113:
-                        _l.sent();
+                    case 133:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 114:
-                        if (!(text === "/leaderboard" || text === "/top")) return [3 /*break*/, 117];
+                    case 134:
+                        if (!(text === "/leaderboard" || text === "/top")) return [3 /*break*/, 137];
                         return [4 /*yield*/, db_1.DB_MANAGER.getTopPlayers(env.DB, 5)];
-                    case 115:
-                        topPlayers = _l.sent();
+                    case 135:
+                        topPlayers = _j.sent();
                         lbText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83C\uDFC6 <b>T O P   B O S S E S</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         if (!topPlayers || topPlayers.length === 0) {
                             lbText += "No players found in the Underworld.";
                         }
                         else {
                             rank = 1;
-                            for (_j = 0, topPlayers_1 = topPlayers; _j < topPlayers_1.length; _j++) {
-                                p = topPlayers_1[_j];
+                            for (_g = 0, topPlayers_1 = topPlayers; _g < topPlayers_1.length; _g++) {
+                                p = topPlayers_1[_g];
                                 medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "🏅";
                                 lbText += "<b>".concat(medal, " Rank ").concat(rank, "</b>\n");
                                 lbText += "\u251C \uD83C\uDD94 <code>".concat(p.user_id, "</code>\n");
@@ -542,49 +625,49 @@ exports.GAME = {
                         }
                         lbText += "".concat(config_1.UI.BORDER_BOT);
                         return [4 /*yield*/, sendMessage(lbText)];
-                    case 116:
-                        _l.sent();
+                    case 136:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 117:
-                        if (!(text === "/boss" || text === "/raid")) return [3 /*break*/, 126];
+                    case 137:
+                        if (!(text === "/boss" || text === "/raid")) return [3 /*break*/, 146];
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
-                    case 118:
-                        user = _l.sent();
-                        if (!(!user || user.is_alive === 0)) return [3 /*break*/, 120];
+                    case 138:
+                        user = _j.sent();
+                        if (!(!user || user.is_alive === 0)) return [3 /*break*/, 140];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.dead, " Murde Boss se nahi ladte. Pehle /revive kar aur apni aukaat bana!"))];
-                    case 119:
-                        _l.sent();
+                    case 139:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 120:
+                    case 140:
                         playerLevel = user.kills + 1;
                         hit = muscle_1.MUSCLE.rollBossDamage(playerLevel);
                         bossDefense = 200;
                         raidText = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDC79 <b>B O S S   R A I D</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         raidText += "\u2694\uFE0F <b>".concat(firstName, "</b> (Lv. ").concat(playerLevel, ") attacked the Kingpin's Convoy!\n");
                         raidText += "\uD83D\uDCA5 <b>Damage Dealt:</b> ".concat(hit.damage, " ").concat(hit.is_crit ? "<b>(CRITICAL HIT! 🔥)</b>" : "", "\n\n");
-                        if (!(hit.damage >= bossDefense)) return [3 /*break*/, 122];
+                        if (!(hit.damage >= bossDefense)) return [3 /*break*/, 142];
                         reward = Math.floor(Math.random() * 5000) + 2000;
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, user.balance + reward)];
-                    case 121:
-                        _l.sent();
+                    case 141:
+                        _j.sent();
                         raidText += "\u2570\u2501\u27EE ".concat(config_1.EMOJIS.success, " <b>V I C T O R Y</b> \u27EF\n\u2502 You broke the convoy's defense!\n\u2502 \uD83D\uDCB0 <b>Reward:</b> +\u20B9").concat(reward, "\n");
-                        return [3 /*break*/, 124];
-                    case 122: 
+                        return [3 /*break*/, 144];
+                    case 142: 
                     // Defeat: Instant Death
                     return [4 /*yield*/, db_1.DB_MANAGER.setAliveStatus(env.DB, userId, 0)];
-                    case 123:
+                    case 143:
                         // Defeat: Instant Death
-                        _l.sent();
+                        _j.sent();
                         raidText += "\u2570\u2501\u27EE ".concat(config_1.EMOJIS.dead, " <b>D E F E A T</b> \u27EF\n\u2502 The Boss's guards overpowered you.\n\u2502 \uD83E\uDE78 You were killed in action. Use /revive.\n");
-                        _l.label = 124;
-                    case 124:
+                        _j.label = 144;
+                    case 144:
                         raidText += "".concat(config_1.UI.BORDER_BOT);
                         return [4 /*yield*/, sendMessage(raidText)];
-                    case 125:
-                        _l.sent();
+                    case 145:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 126:
-                        if (!(text === "/id")) return [3 /*break*/, 128];
+                    case 146:
+                        if (!(text === "/id")) return [3 /*break*/, 148];
                         idText = "\uD83C\uDD94 <b>Your ID:</b> <code>".concat(userId, "</code>\n\uD83D\uDCAC <b>Chat ID:</b> <code>").concat(chatId, "</code>");
                         // Agar kisi ke message par reply kiya hai, toh uska ID bhi dikhao
                         if (update.message.reply_to_message) {
@@ -593,18 +676,18 @@ exports.GAME = {
                             idText += "\n\uD83D\uDC64 <b>".concat(replyName, "'s ID:</b> <code>").concat(replyId, "</code>");
                         }
                         return [4 /*yield*/, sendMessage(idText)];
-                    case 127:
-                        _l.sent();
+                    case 147:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 128:
-                        if (!(text === "/ping")) return [3 /*break*/, 130];
+                    case 148:
+                        if (!(text === "/ping")) return [3 /*break*/, 150];
                         latency = Date.now() - startTime;
                         return [4 /*yield*/, sendMessage("\uD83C\uDFD3 <b>Pong!</b>\n\u26A1 <b>Latency:</b> <code>".concat(latency, "ms</code>\n\uD83D\uDCE1 <b>Status:</b> <i>Stable & Operational</i>"))];
-                    case 129:
-                        _l.sent();
+                    case 149:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 130:
-                        if (!text.startsWith("/bal")) return [3 /*break*/, 136];
+                    case 150:
+                        if (!text.startsWith("/bal")) return [3 /*break*/, 156];
                         targetId = userId;
                         targetName = firstName;
                         // Agar reply kiya hai toh dost ka balance dikhao
@@ -613,208 +696,208 @@ exports.GAME = {
                             targetName = update.message.reply_to_message.from.first_name || "User";
                         }
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, targetId)];
-                    case 131:
-                        user = _l.sent();
-                        if (!user) return [3 /*break*/, 133];
+                    case 151:
+                        user = _j.sent();
+                        if (!user) return [3 /*break*/, 153];
                         return [4 /*yield*/, sendMessage("\uD83D\uDCB0 <b>".concat(targetName, "'s Balance:</b> \u20B9").concat(user.balance))];
-                    case 132:
-                        _l.sent();
-                        return [3 /*break*/, 135];
-                    case 133: return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Account not found."))];
-                    case 134:
-                        _l.sent();
-                        _l.label = 135;
-                    case 135: return [2 /*return*/];
-                    case 136:
-                        if (!text.startsWith("/transfer")) return [3 /*break*/, 144];
+                    case 152:
+                        _j.sent();
+                        return [3 /*break*/, 155];
+                    case 153: return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Account not found."))];
+                    case 154:
+                        _j.sent();
+                        _j.label = 155;
+                    case 155: return [2 /*return*/];
+                    case 156:
+                        if (!text.startsWith("/transfer")) return [3 /*break*/, 164];
                         if (userId !== config_1.CONFIG.OWNER_ID)
                             return [2 /*return*/]; // Silent block for non-owners
-                        if (!(!update.message.reply_to_message || args.length === 0)) return [3 /*break*/, 138];
+                        if (!(!update.message.reply_to_message || args.length === 0)) return [3 /*break*/, 158];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>Usage:</b> Reply + <code>/transfer [amount]</code>"))];
-                    case 137:
-                        _l.sent();
+                    case 157:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 138:
+                    case 158:
                         amount = parseInt(args[0]);
                         if (isNaN(amount))
                             return [2 /*return*/];
                         targetId = update.message.reply_to_message.from.id;
                         targetName = update.message.reply_to_message.from.first_name || "Agent";
                         return [4 /*yield*/, db_1.DB_MANAGER.ensureUserExists(env.DB, targetId)];
-                    case 139:
-                        _l.sent();
+                    case 159:
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, targetId)];
-                    case 140:
-                        target = _l.sent();
-                        if (!target) return [3 /*break*/, 143];
+                    case 160:
+                        target = _j.sent();
+                        if (!target) return [3 /*break*/, 163];
                         newBalance = target.balance + amount;
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, targetId, newBalance)];
-                    case 141:
-                        _l.sent();
+                    case 161:
+                        _j.sent();
                         action = amount > 0 ? "blessed" : "penalized";
                         symbol = amount > 0 ? "+" : "";
                         return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDC51 <b>S U P R E M E   O R D E R</b>\n").concat(config_1.UI.BORDER_BOT, "\n\nBoss has ").concat(action, " <b>").concat(targetName, "</b>!\n\uD83D\uDCCA <b>Transaction:</b> ").concat(symbol).concat(amount, "\n\uD83C\uDFE6 <b>New Balance:</b> \u20B9").concat(newBalance, "\n").concat(config_1.UI.BORDER_BOT))];
-                    case 142:
-                        _l.sent();
-                        _l.label = 143;
-                    case 143: return [2 /*return*/];
-                    case 144:
-                        if (!(text.startsWith("/pay") || text.startsWith("/give"))) return [3 /*break*/, 164];
-                        if (!!update.message.reply_to_message) return [3 /*break*/, 146];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Kisko paise dene hain? Reply to a player."))];
-                    case 145:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 146:
-                        if (!(args.length === 0)) return [3 /*break*/, 148];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>Usage:</b> <code>/pay [amount]</code>\nExample: <code>/pay 500</code>"))];
-                    case 147:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 148:
-                        amount = parseInt(args[0]);
-                        if (!(isNaN(amount) || amount <= 0)) return [3 /*break*/, 150];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Sahi amount daal bhai."))];
-                    case 149:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 150:
-                        targetId = update.message.reply_to_message.from.id;
-                        targetName = update.message.reply_to_message.from.first_name || "Agent";
-                        if (!(userId === targetId)) return [3 /*break*/, 152];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Khud ko paise kyu de raha hai?"))];
-                    case 151:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 152:
-                        if (!update.message.reply_to_message.from.is_bot) return [3 /*break*/, 154];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Bot moh-maya se door hai."))];
-                    case 153:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 154: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
-                    case 155:
-                        sender = _l.sent();
-                        if (!(!sender || sender.balance < amount)) return [3 /*break*/, 157];
-                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Teri jeb me itne paise nahi hain. Balance: \u20B9").concat((sender === null || sender === void 0 ? void 0 : sender.balance) || 0))];
-                    case 156:
-                        _l.sent();
-                        return [2 /*return*/];
-                    case 157: 
-                    // Ensure target exists
-                    return [4 /*yield*/, db_1.DB_MANAGER.ensureUserExists(env.DB, targetId)];
-                    case 158:
-                        // Ensure target exists
-                        _l.sent();
-                        return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, targetId)];
-                    case 159:
-                        target = _l.sent();
-                        if (!target) return [3 /*break*/, 163];
-                        // Deduct from sender, Add to target
-                        return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, sender.balance - amount)];
-                    case 160:
-                        // Deduct from sender, Add to target
-                        _l.sent();
-                        return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount)];
-                    case 161:
-                        _l.sent();
-                        return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCB8 <b>M O N E Y   T R A N S F E R</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(config_1.EMOJIS.success, " <b>").concat(firstName, "</b> ne <b>").concat(targetName, "</b> ko \u20B9").concat(amount, " diye!\n\n\uD83C\uDFE6 <b>Your New Balance:</b> \u20B9").concat(sender.balance - amount))];
                     case 162:
-                        _l.sent();
-                        _l.label = 163;
+                        _j.sent();
+                        _j.label = 163;
                     case 163: return [2 /*return*/];
                     case 164:
-                        if (!(text.startsWith("/defend") || text.startsWith("/safe"))) return [3 /*break*/, 180];
-                        return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
+                        if (!(text.startsWith("/pay") || text.startsWith("/give"))) return [3 /*break*/, 184];
+                        if (!!update.message.reply_to_message) return [3 /*break*/, 166];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Kisko paise dene hain? Reply to a player."))];
                     case 165:
-                        user = _l.sent();
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 166:
+                        if (!(args.length === 0)) return [3 /*break*/, 168];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>Usage:</b> <code>/pay [amount]</code>\nExample: <code>/pay 500</code>"))];
+                    case 167:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 168:
+                        amount = parseInt(args[0]);
+                        if (!(isNaN(amount) || amount <= 0)) return [3 /*break*/, 170];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Sahi amount daal bhai."))];
+                    case 169:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 170:
+                        targetId = update.message.reply_to_message.from.id;
+                        targetName = update.message.reply_to_message.from.first_name || "Agent";
+                        if (!(userId === targetId)) return [3 /*break*/, 172];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Khud ko paise kyu de raha hai?"))];
+                    case 171:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 172:
+                        if (!update.message.reply_to_message.from.is_bot) return [3 /*break*/, 174];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Bot moh-maya se door hai."))];
+                    case 173:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 174: return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
+                    case 175:
+                        sender = _j.sent();
+                        if (!(!sender || sender.balance < amount)) return [3 /*break*/, 177];
+                        return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Teri jeb me itne paise nahi hain. Balance: \u20B9").concat((sender === null || sender === void 0 ? void 0 : sender.balance) || 0))];
+                    case 176:
+                        _j.sent();
+                        return [2 /*return*/];
+                    case 177: 
+                    // Ensure target exists
+                    return [4 /*yield*/, db_1.DB_MANAGER.ensureUserExists(env.DB, targetId)];
+                    case 178:
+                        // Ensure target exists
+                        _j.sent();
+                        return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, targetId)];
+                    case 179:
+                        target = _j.sent();
+                        if (!target) return [3 /*break*/, 183];
+                        // Deduct from sender, Add to target
+                        return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, sender.balance - amount)];
+                    case 180:
+                        // Deduct from sender, Add to target
+                        _j.sent();
+                        return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, targetId, target.balance + amount)];
+                    case 181:
+                        _j.sent();
+                        return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDCB8 <b>M O N E Y   T R A N S F E R</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(config_1.EMOJIS.success, " <b>").concat(firstName, "</b> ne <b>").concat(targetName, "</b> ko \u20B9").concat(amount, " diye!\n\n\uD83C\uDFE6 <b>Your New Balance:</b> \u20B9").concat(sender.balance - amount))];
+                    case 182:
+                        _j.sent();
+                        _j.label = 183;
+                    case 183: return [2 /*return*/];
+                    case 184:
+                        if (!(text.startsWith("/defend") || text.startsWith("/safe"))) return [3 /*break*/, 200];
+                        return [4 /*yield*/, db_1.DB_MANAGER.getUser(env.DB, userId)];
+                    case 185:
+                        user = _j.sent();
                         if (!user)
                             return [2 /*return*/];
                         currentSeconds = Math.floor(Date.now() / 1000);
-                        if (!(user.protection_until && user.protection_until > currentSeconds)) return [3 /*break*/, 167];
+                        if (!(user.protection_until && user.protection_until > currentSeconds)) return [3 /*break*/, 187];
                         remaining = Math.ceil((user.protection_until - currentSeconds) / 3600);
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " <b>Protection Active!</b>\nAapki security pehle se chalu hai.\n\u23F3 <b>Remaining:</b> ~").concat(remaining, " hours.\nKhatam hone ke baad hi naya plan le sakte hain."))];
-                    case 166:
-                        _l.sent();
+                    case 186:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 167:
-                        if (!(args.length === 0)) return [3 /*break*/, 169];
+                    case 187:
+                        if (!(args.length === 0)) return [3 /*break*/, 189];
                         return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDEE1\uFE0F <b>B U Y   P R O T E C T I O N</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n<b>Plans:</b>\n\u251C <code>/defend 1d</code> \u2796 \u20B9400\n\u251C <code>/defend 2d</code> \u2796 \u20B9800\n\u2514 <code>/defend 3d</code> \u2796 \u20B91400"))];
-                    case 168:
-                        _l.sent();
+                    case 188:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 169:
+                    case 189:
                         plan = args[0].toLowerCase();
                         cost = 0;
                         days = 0;
-                        if (!(plan === "1d")) return [3 /*break*/, 170];
+                        if (!(plan === "1d")) return [3 /*break*/, 190];
                         cost = 400;
                         days = 1;
-                        return [3 /*break*/, 174];
-                    case 170:
-                        if (!(plan === "2d")) return [3 /*break*/, 171];
+                        return [3 /*break*/, 194];
+                    case 190:
+                        if (!(plan === "2d")) return [3 /*break*/, 191];
                         cost = 800;
                         days = 2;
-                        return [3 /*break*/, 174];
-                    case 171:
-                        if (!(plan === "3d")) return [3 /*break*/, 172];
+                        return [3 /*break*/, 194];
+                    case 191:
+                        if (!(plan === "3d")) return [3 /*break*/, 192];
                         cost = 1400;
                         days = 3;
-                        return [3 /*break*/, 174];
-                    case 172: return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Invalid plan (1d/2d/3d)."))];
-                    case 173:
-                        _l.sent();
+                        return [3 /*break*/, 194];
+                    case 192: return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Invalid plan (1d/2d/3d)."))];
+                    case 193:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 174:
-                        if (!(user.balance < cost)) return [3 /*break*/, 176];
+                    case 194:
+                        if (!(user.balance < cost)) return [3 /*break*/, 196];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Low balance! \u20B9").concat(cost, " required."))];
-                    case 175:
-                        _l.sent();
+                    case 195:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 176:
+                    case 196:
                         newProtectionTime = currentSeconds + (days * 86400);
                         return [4 /*yield*/, db_1.DB_MANAGER.updateBalance(env.DB, userId, user.balance - cost)];
-                    case 177:
-                        _l.sent();
+                    case 197:
+                        _j.sent();
                         return [4 /*yield*/, db_1.DB_MANAGER.setProtection(env.DB, userId, newProtectionTime)];
-                    case 178:
-                        _l.sent();
+                    case 198:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDEE1\uFE0F <b>G U A R D S   H I R E D</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n").concat(config_1.EMOJIS.success, " <b>").concat(firstName, "</b> protected for <b>").concat(days, " Day(s)</b>!"))];
-                    case 179:
-                        _l.sent();
+                    case 199:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 180:
-                        if (!(text === "/upgradedb")) return [3 /*break*/, 187];
+                    case 200:
+                        if (!(text === "/upgradedb")) return [3 /*break*/, 207];
                         if (userId !== config_1.CONFIG.OWNER_ID)
                             return [2 /*return*/];
-                        _l.label = 181;
-                    case 181:
-                        _l.trys.push([181, 184, , 186]);
+                        _j.label = 201;
+                    case 201:
+                        _j.trys.push([201, 204, , 206]);
                         // Table for Group Admins
                         return [4 /*yield*/, env.DB.prepare("CREATE TABLE IF NOT EXISTS group_admins (chat_id INTEGER, user_id INTEGER, level INTEGER, title TEXT, PRIMARY KEY(chat_id, user_id))").run()];
-                    case 182:
+                    case 202:
                         // Table for Group Admins
-                        _l.sent();
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("✅ <b>Database Upgraded!</b> Admin table created.")];
-                    case 183:
-                        _l.sent();
-                        return [3 /*break*/, 186];
-                    case 184:
-                        e_2 = _l.sent();
+                    case 203:
+                        _j.sent();
+                        return [3 /*break*/, 206];
+                    case 204:
+                        e_2 = _j.sent();
                         return [4 /*yield*/, sendMessage("\u26A0\uFE0F Error: ".concat(e_2.message))];
-                    case 185:
-                        _l.sent();
-                        return [3 /*break*/, 186];
-                    case 186: return [2 /*return*/];
-                    case 187: return [4 /*yield*/, db_1.DB_MANAGER.getAdmin(env.DB, chatId, userId)];
-                    case 188:
-                        adminData = _l.sent();
+                    case 205:
+                        _j.sent();
+                        return [3 /*break*/, 206];
+                    case 206: return [2 /*return*/];
+                    case 207: return [4 /*yield*/, db_1.DB_MANAGER.getAdmin(env.DB, chatId, userId)];
+                    case 208:
+                        adminData = _j.sent();
                         isOwner = userId === config_1.CONFIG.OWNER_ID;
                         isHighAdmin = (adminData && adminData.level === 3) || isOwner;
-                        if (!text.startsWith("/promote")) return [3 /*break*/, 193];
+                        if (!text.startsWith("/promote")) return [3 /*break*/, 213];
                         if (!isHighAdmin)
                             return [2 /*return*/];
-                        targetId = (_c = update.message.reply_to_message) === null || _c === void 0 ? void 0 : _c.from.id;
+                        targetId = (_a = update.message.reply_to_message) === null || _a === void 0 ? void 0 : _a.from.id;
                         level = 1;
                         idArg = args.find(function (a) { return !isNaN(parseInt(a)) && a.length > 7; });
                         lvlArg = args.find(function (a) { return ["1", "2", "3"].includes(a); });
@@ -822,96 +905,96 @@ exports.GAME = {
                             targetId = parseInt(idArg);
                         if (lvlArg)
                             level = parseInt(lvlArg);
-                        if (!!targetId) return [3 /*break*/, 190];
+                        if (!!targetId) return [3 /*break*/, 210];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Reply to user or provide an ID."))];
-                    case 189:
-                        _l.sent();
+                    case 209:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 190: return [4 /*yield*/, db_1.DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Member")];
-                    case 191:
-                        _l.sent();
+                    case 210: return [4 /*yield*/, db_1.DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Member")];
+                    case 211:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("\u2705 <b>PROMOTED!</b>\nUser <code>".concat(targetId, "</code> is now a <b>Level ").concat(level, " Admin</b> in this group."))];
-                    case 192:
-                        _l.sent();
+                    case 212:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 193:
-                        if (!text.startsWith("/demote")) return [3 /*break*/, 196];
+                    case 213:
+                        if (!text.startsWith("/demote")) return [3 /*break*/, 216];
                         if (!isHighAdmin)
                             return [2 /*return*/];
-                        targetId = (_d = update.message.reply_to_message) === null || _d === void 0 ? void 0 : _d.from.id;
+                        targetId = (_b = update.message.reply_to_message) === null || _b === void 0 ? void 0 : _b.from.id;
                         idArg = args.find(function (a) { return !isNaN(parseInt(a)) && a.length > 7; });
                         if (idArg)
                             targetId = parseInt(idArg);
                         if (!targetId)
                             return [2 /*return*/];
                         return [4 /*yield*/, db_1.DB_MANAGER.removeAdmin(env.DB, chatId, targetId)];
-                    case 194:
-                        _l.sent();
+                    case 214:
+                        _j.sent();
                         return [4 /*yield*/, sendMessage("\u274C <b>DEMOTED!</b>\nUser <code>".concat(targetId, "</code> removed from Admin list."))];
-                    case 195:
-                        _l.sent();
+                    case 215:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 196:
-                        if (!text.startsWith("/title")) return [3 /*break*/, 206];
+                    case 216:
+                        if (!text.startsWith("/title")) return [3 /*break*/, 226];
                         if (!isHighAdmin)
                             return [2 /*return*/];
-                        targetId = (_e = update.message.reply_to_message) === null || _e === void 0 ? void 0 : _e.from.id;
+                        targetId = (_c = update.message.reply_to_message) === null || _c === void 0 ? void 0 : _c.from.id;
                         titleName = args.filter(function (a) { return isNaN(parseInt(a)) || a.length < 7; }).join(" ");
                         idArg = args.find(function (a) { return !isNaN(parseInt(a)) && a.length > 7; });
                         if (idArg)
                             targetId = parseInt(idArg);
-                        if (!(!targetId || !titleName)) return [3 /*break*/, 198];
+                        if (!(!targetId || !titleName)) return [3 /*break*/, 218];
                         return [4 /*yield*/, sendMessage("".concat(config_1.EMOJIS.error, " Usage: /title [name] [id/reply]"))];
-                    case 197:
-                        _l.sent();
+                    case 217:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 198: return [4 /*yield*/, db_1.DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName)];
-                    case 199:
-                        _l.sent();
-                        _l.label = 200;
-                    case 200:
-                        _l.trys.push([200, 203, , 204]);
+                    case 218: return [4 /*yield*/, db_1.DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName)];
+                    case 219:
+                        _j.sent();
+                        _j.label = 220;
+                    case 220:
+                        _j.trys.push([220, 223, , 224]);
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/promoteChatMember"), {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, user_id: targetId, can_manage_chat: true })
                             })];
-                    case 201:
-                        _l.sent();
+                    case 221:
+                        _j.sent();
                         return [4 /*yield*/, fetch("https://api.telegram.org/bot".concat(config_1.CONFIG.BOT_TOKEN, "/setChatAdministratorCustomTitle"), {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ chat_id: chatId, user_id: targetId, custom_title: titleName })
                             })];
-                    case 202:
-                        _l.sent();
-                        return [3 /*break*/, 204];
-                    case 203:
-                        e_3 = _l.sent();
-                        return [3 /*break*/, 204];
-                    case 204: return [4 /*yield*/, sendMessage("\uD83C\uDFF7\uFE0F <b>TITLE UPDATED!</b>\nTarget <code>".concat(targetId, "</code> is now tagged as: <b>").concat(titleName, "</b>"))];
-                    case 205:
-                        _l.sent();
+                    case 222:
+                        _j.sent();
+                        return [3 /*break*/, 224];
+                    case 223:
+                        e_3 = _j.sent();
+                        return [3 /*break*/, 224];
+                    case 224: return [4 /*yield*/, sendMessage("\uD83C\uDFF7\uFE0F <b>TITLE UPDATED!</b>\nTarget <code>".concat(targetId, "</code> is now tagged as: <b>").concat(titleName, "</b>"))];
+                    case 225:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 206:
-                        if (!(text === "/admins")) return [3 /*break*/, 209];
+                    case 226:
+                        if (!(text === "/admins")) return [3 /*break*/, 229];
                         return [4 /*yield*/, db_1.DB_MANAGER.getAllAdmins(env.DB, chatId)];
-                    case 207:
-                        allAdmins = _l.sent();
+                    case 227:
+                        allAdmins = _j.sent();
                         list = "".concat(config_1.UI.BORDER_TOP, "\n\u2502 \uD83D\uDEE1\uFE0F <b>G R O U P   A D M I N S</b>\n").concat(config_1.UI.BORDER_BOT, "\n\n");
                         if (allAdmins.length === 0)
                             list += "No custom admins registered.";
                         else {
-                            for (_k = 0, allAdmins_1 = allAdmins; _k < allAdmins_1.length; _k++) {
-                                a = allAdmins_1[_k];
+                            for (_h = 0, allAdmins_1 = allAdmins; _h < allAdmins_1.length; _h++) {
+                                a = allAdmins_1[_h];
                                 list += "\uD83D\uDC64 <code>".concat(a.user_id, "</code>\n\u2514 \uD83C\uDF96\uFE0F <b>Lvl ").concat(a.level, "</b> | \uD83C\uDFF7\uFE0F <i>").concat(a.title, "</i>\n\n");
                             }
                         }
                         return [4 /*yield*/, sendMessage(chatId, list + config_1.UI.BORDER_BOT)];
-                    case 208:
-                        _l.sent();
+                    case 228:
+                        _j.sent();
                         return [2 /*return*/];
-                    case 209: return [2 /*return*/];
+                    case 229: return [2 /*return*/];
                 }
             });
         });
