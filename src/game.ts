@@ -450,15 +450,24 @@ ${UI.BORDER_BOT}`;
       await env.DB.prepare(`UPDATE users SET raid_spam_strikes = 0, last_raid_time = ? WHERE user_id = ?`).bind(now, tgRaider.id).run();
 
       // 4. Target Check
-      const targetDb = await env.DB.prepare(`SELECT balance FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
+      // FIX: Now fetching protection_until to enforce the shield
+      const targetDb = await env.DB.prepare(`SELECT balance, protection_until FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
       if (!targetDb) {
         await sendMessage(chatId, "❌ Target not found in the Underworld database.");
         return;
       }
-      if (targetDb.balance < 100) {
-        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}.`);
+
+      // 🛡️ THE IMPENETRABLE SHIELD FIX
+      if (targetDb.protection_until && targetDb.protection_until > now) {
+        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\n\n<blockquote>${targetDisplay} has active Underworld Protection.\nYour robbery attempt was blocked by their security forces.</blockquote>`);
         return;
       }
+
+      if (targetDb.balance < 100) {
+        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}. Not worth the risk.`);
+        return;
+      }
+
 
       // 5. The RNG & Economy
       const cappedAmount = Math.min(amount, targetDb.balance);
