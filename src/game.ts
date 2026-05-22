@@ -824,11 +824,6 @@ ${UI.BORDER_BOT}`;
    
     // ╭━━━━━━━━━━━━━━━✪ [ADMIN MANAGEMENT: PROMOTE/DEMOTE/TITLE/ADMINS]
     
-    // Check if caller is Admin or Owner
-    const adminData = await DB_MANAGER.getAdmin(env.DB, chatId, userId);
-    const isOwner = userId === CONFIG.OWNER_ID;
-    const isHighAdmin = (adminData && adminData.level === 3) || isOwner;
-
 // ====================================================
     // --- PROMOTE ---
     if (text.startsWith("/promote")) {
@@ -845,12 +840,40 @@ ${UI.BORDER_BOT}`;
       if (lvlArg) level = parseInt(lvlArg);
 
       if (!targetId) {
-        await sendMessage(`${EMOJIS.error} Reply to user or provide an ID.`);
+        await sendMessage(chatId, "❌ Reply to user or provide an ID.");
         return;
       }
 
-      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Member");
-      await sendMessage(`✅ <b>PROMOTED!</b>\nUser <code>${targetId}</code> is now a <b>Level ${level} Admin</b> in this group.`);
+      // 1. Tell Telegram to execute the promotion
+      try {
+        const response = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            chat_id: chatId, 
+            user_id: targetId, 
+            can_manage_chat: true,
+            can_delete_messages: true,
+            can_invite_users: true,
+            can_restrict_members: true,
+            can_pin_messages: true,
+            can_manage_video_chats: true
+          })
+        });
+        const data = await response.json();
+        
+        if (!data.ok) {
+           await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${data.description}\n<i>(Ensure the bot has "Add New Admins" permission!)</i>`);
+           return;
+        }
+      } catch (e) {
+        await sendMessage(chatId, "❌ Failed to connect to Telegram API.");
+        return;
+      }
+
+      // 2. Update Internal Database
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Admin");
+      await sendMessage(chatId, `✅ <b>PROMOTED!</b>\nUser <code>${targetId}</code> is now a Telegram Admin and a Level ${level} Underworld Admin.`);
       return;
     }
 
@@ -863,11 +886,34 @@ ${UI.BORDER_BOT}`;
       if (idArg) targetId = parseInt(idArg);
 
       if (!targetId) return;
+
+      // 1. Tell Telegram to strip all Admin rights
+      try {
+        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            chat_id: chatId, 
+            user_id: targetId, 
+            can_manage_chat: false,
+            can_change_info: false,
+            can_delete_messages: false,
+            can_invite_users: false,
+            can_restrict_members: false,
+            can_pin_messages: false,
+            can_manage_video_chats: false,
+            can_promote_members: false
+          })
+        });
+      } catch (e) {}
+
+      // 2. Update Internal Database
       await DB_MANAGER.removeAdmin(env.DB, chatId, targetId);
-      await sendMessage(`❌ <b>DEMOTED!</b>\nUser <code>${targetId}</code> removed from Admin list.`);
+      await sendMessage(chatId, `❌ <b>DEMOTED!</b>\nUser <code>${targetId}</code> stripped of all Admin rights.`);
       return;
     }
 
+// ====================================================
     // --- TITLE ---
     if (text.startsWith("/title")) {
       if (!isHighAdmin) return;
@@ -877,44 +923,39 @@ ${UI.BORDER_BOT}`;
       if (idArg) targetId = parseInt(idArg);
 
       if (!targetId || !titleName) {
-        await sendMessage(`${EMOJIS.error} Usage: /title [name] [id/reply]`);
+        await sendMessage(chatId, "❌ Usage: /title [name] [id/reply]");
         return;
       }
 
-      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName);
-
-      // Telegram API Call to set Tag (Bot must have 'Add Admin' rights)
+      // 1. Tell Telegram to set the Title (Requires the user to be an admin first)
       try {
+        // Ensure they have base admin rights first
         await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chat_id: chatId, user_id: targetId, can_manage_chat: true })
         });
-        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/setChatAdministratorCustomTitle`, {
+        
+        // Apply the custom title
+        const titleRes = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/setChatAdministratorCustomTitle`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ chat_id: chatId, user_id: targetId, custom_title: titleName })
         });
+        
+        const titleData = await titleRes.json();
+        if (!titleData.ok) {
+           await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${titleData.description}\n<i>(Bot needs 'Add Admins' right!)</i>`);
+           return;
+        }
       } catch (e) {}
 
-      await sendMessage(`🏷️ <b>TITLE UPDATED!</b>\nTarget <code>${targetId}</code> is now tagged as: <b>${titleName}</b>`);
+      // 2. Update Internal Database
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName);
+      await sendMessage(chatId, `🏷️ <b>TITLE UPDATED!</b>\nTarget <code>${targetId}</code> is now officially tagged as: <b>${titleName}</b>`);
       return;
     }
 
-// ====================================================
-    // --- ADMINS LIST ---
-    if (text === "/admins") {
-      const allAdmins = await DB_MANAGER.getAllAdmins(env.DB, chatId);
-      let list = `${UI.BORDER_TOP}\n│ 🛡️ <b>G R O U P   A D M I N S</b>\n${UI.BORDER_BOT}\n\n`;
-      if (allAdmins.length === 0) list += "No custom admins registered.";
-      else {
-        for (const a of allAdmins) {
-          list += `👤 <code>${a.user_id}</code>\n└ 🎖️ <b>Lvl ${a.level}</b> | 🏷️ <i>${a.title}</i>\n\n`;
-        }
-      }
-      await sendMessage(chatId, list + UI.BORDER_BOT);
-      return;
-    }
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
     
   }, // <--- ⚠️ THIS IS THE MAGIC COMMA THAT FIXES THE CRASH ⚠️
