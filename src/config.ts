@@ -6,7 +6,7 @@
 import { MarketItem } from './types';
 
 export const CONFIG = {
-  BOT_TOKEN: "8322009620:AAG7rLte-1Q8-CjKiJqxEppPwjsVFJyvc6U", 
+  BOT_TOKEN: "8814322867:AAFT0zdEohAeQb_21mDOWyXK54A6uBUnoCo", 
   STARTING_BALANCE: 1000,
   MARKET_UPDATE_INTERVAL: 300,
   OWNER_ID: 8210345021 // 👑 Supreme Boss (You)
