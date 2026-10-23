@@ -1,3 +1,4 @@
+
 // ╭━━━━━━━━━━━━━━━✪
 // │ 🎮 THE ARENA (GAME FEATURES)
 // ╰━━━━━━━━━━━━━━━✪
@@ -9,6 +10,7 @@ import { DB_MANAGER } from './db';
 import { MUSCLE } from './muscle';
 import { CONFIG, UI, EMOJIS, MARKET_ITEMS } from './config';
 import { CloudflareEnv } from './types';
+import { createStatusCard } from "./ui";
 
 
 export const GAME = {
@@ -94,26 +96,30 @@ export const GAME = {
 
 // ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [PROFILE FEATURE]
-    if (text.startsWith("/profile") || text.startsWith("/me")) {
-      const user = await DB_MANAGER.getUser(env.DB, userId);
-      if (!user) return;
-      
-      const status = user.is_alive === 1 ? `${EMOJIS.alive} Alive` : `${EMOJIS.dead} Dead`;
-      const profileText = 
-`${UI.BORDER_TOP}
-│ 💳 <b>U N D E R W O R L D   I D</b>
-${UI.BORDER_BOT}
 
-👤 <b>Name:</b> ${firstName}
-🆔 <b>Citizen ID:</b> <code>${userId}</code>
-💰 <b>Net Worth:</b> ₹${user.balance}
-🔪 <b>Total Kills:</b> ${user.kills}
-❤️ <b>Status:</b> ${status}
+if (text === "/me" || text === "/profile") {
+  const user = await DB_MANAGER.getUser(env.DB, userId);
+  if (!user) return;
 
-${UI.BORDER_BOT}`;
-      await sendMessage(profileText);
-      return;
-    }
+  const card = createStatusCard({
+    title: "👤 UNDERWORLD DOSSIER",
+    rows: [
+      { label: "👤 PLAYER", value: update.message.from.first_name },
+      { label: "🆔 UID", value: userId },
+      { label: "💰 CASH", value: `₹${user.balance}` },
+      { label: "🔫 AMMO", value: `${(user as any).ammo || 0} rounds` },
+      { label: "💀 KILLS", value: user.kills || 0 },
+      { label: "❤️ STATUS", value: user.is_alive ? "ALIVE" : "ELIMINATED" },
+    ],
+    footer: user.is_alive
+      ? "🟢 STATUS • Operational and armed"
+      : "💀 STATUS • Knocked out. Use /revive to rejoin.",
+  });
+
+  await sendMessage(chatId, card);
+  return;
+}
+
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
     // ╭━━━━━━━━━━━━━━━✪ [MARKET FEATURE]
@@ -254,256 +260,450 @@ ${UI.BORDER_BOT}`;
 
     // ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [THE FIRE / HITMAN MECHANIC]
-    if (text.startsWith("/fire") || text.startsWith("/f ")) {
-      const now = Math.floor(Date.now() / 1000);
-      const tgShooter = update.message.from;
-      const messageId = update.message.message_id;
-      const replyTo = update.message.reply_to_message;
 
-      // 1. Parse Target (Reply gets priority)
-      const cleanText = text.replace(/^\/fire(?:@\S+)?/i, "").replace(/^\/f(?:@\S+)?/i, "").trim();
-      const parsedId = parseInt(cleanText, 10);
-      let targetId: number | null = null;
-      let targetDisplay = "";
+    // =========================================================================
+    // ╭━━━━━━━━━━━━━━━✪ [AMMO SYSTEM: /b, /bullets, /ammo, /buy]
+    // =========================================================================
+    const lowerText = text.toLowerCase().trim();
+    const isAmmoCmd = lowerText === "/b" || 
+                      lowerText === "/bullets" || 
+                      lowerText === "/ammo" || 
+                      lowerText.startsWith("/b ") || 
+                      lowerText.startsWith("/bullets ") || 
+                      lowerText.startsWith("/buy ");
 
-      if (replyTo && replyTo.from) {
-        targetId = replyTo.from.id;
-        targetDisplay = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name;
-      } else if (!isNaN(parsedId) && parsedId > 0) {
-        targetId = parsedId;
-        targetDisplay = `ID: <code>${parsedId}</code>`;
-      } else {
-        await sendMessage(chatId, "❌ <b>Usage:</b> <code>/fire [id]</code>\nOr reply to a user's message with <code>/fire</code>.");
-        return;
-      }
+    if (isAmmoCmd) {
+      // Ensure user entry exists
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) 
+         VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`
+      ).bind(userId).run();
 
-      if (targetId === tgShooter.id) {
-        await sendMessage(chatId, "❌ You cannot shoot yourself, Boss.");
-        return;
-      }
+      const user = await env.DB.prepare(
+        `SELECT balance, ammo FROM users WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first<any>();
 
-      // 2. Fetch Shooter & Initialize if needed
-      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`).bind(tgShooter.id).run();
-      const shooter = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(tgShooter.id).first<any>();
+      const currentAmmo = user ? user.ammo : 0;
+      const currentBalance = user ? user.balance : 0;
 
-      // 3. Anti-Spam Gate
-      if (shooter.fire_lock_until > now) {
-        const remaining = shooter.fire_lock_until - now;
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        await sendMessage(chatId, `🔒 <b>LOCKED OUT!</b>\nYou spammed /fire too fast. Wait <b>${mins}m ${secs}s</b>.`);
-        return;
-      }
+      // Extract requested count if provided (e.g. "/b 10", "/buy 5 bullets")
+      let purchaseQty: number | null = null;
+      const parts = text.trim().split(/\s+/);
 
-      const timeSinceLast = now - shooter.last_fire_time;
-      if (timeSinceLast < 2) { // 2 Second Cooldown
-        const newStrikes = shooter.fire_spam_strikes + 1;
-        if (newStrikes >= 4) {
-          const lockUntil = now + 240; // 4 Minutes
-          await env.DB.prepare(`UPDATE users SET fire_spam_strikes = 0, fire_lock_until = ? WHERE user_id = ?`).bind(lockUntil, tgShooter.id).run();
-          await sendMessage(chatId, `⛔ <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. Banned from shooting for 4 minutes.`);
-        } else {
-          await env.DB.prepare(`UPDATE users SET fire_spam_strikes = ? WHERE user_id = ?`).bind(newStrikes, tgShooter.id).run();
-          await sendMessage(chatId, `⚠️ <b>Slow down!</b> Strike <b>${newStrikes}/4</b>. Hit 4 and your gun jams for 4 minutes.`);
+      if (parts.length > 1) {
+        for (let i = 1; i < parts.length; i++) {
+          const parsed = parseInt(parts[i], 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            purchaseQty = parsed;
+            break;
+          }
         }
+      }
+
+      // CASE 1: Query only (No quantity provided)
+      if (purchaseQty === null) {
+        const card = createStatusCard({
+          title: "🔫 AMMO INVENTORY",
+          rows: [
+            { label: "👤 PLAYER", value: update.message.from.first_name || "Unknown" },
+            { label: "🆔 UID", value: userId },
+            { label: "🔋 AMMO", value: `${currentAmmo} rounds` },
+            { label: "💰 CASH", value: `₹${currentBalance}` },
+          ],
+          footer: "💡 HINT • Buy rounds at ₹1/bullet using /b [amount]",
+        });
+        await sendMessage(chatId, card);
         return;
       }
 
-      // Update active time safely
-      await env.DB.prepare(`UPDATE users SET fire_spam_strikes = 0, last_fire_time = ? WHERE user_id = ?`).bind(now, tgShooter.id).run();
-
-      // 4. Ammo Check
-      if (shooter.ammo < 1) {
-        await sendMessage(chatId, "❌ <b>OUT OF AMMO!</b>\nBuy bullets using <code>/b 10</code> or <code>/bullets 20</code>.");
+      // CASE 2: Ammo Purchase (Rate: ₹1 per bullet)
+      const cost = purchaseQty * 1;
+      if (currentBalance < cost) {
+        const card = createStatusCard({
+          title: "❌ PURCHASE FAILED",
+          rows: [
+            { label: "👤 BUYER", value: update.message.from.first_name || "Unknown" },
+            { label: "🛒 ORDER", value: `${purchaseQty} bullets` },
+            { label: "🏷️ PRICE", value: `₹${cost}` },
+            { label: "💰 WALLET", value: `₹${currentBalance}` },
+          ],
+          footer: "⚠️ ERROR • Insufficient funds in your account.",
+        });
+        await sendMessage(chatId, card);
         return;
       }
 
-      // 5. Fetch Target
-      const targetDb = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
-      if (!targetDb) {
-        await sendMessage(chatId, "❌ Target not found in the Underworld database.");
-        return;
-      }
+      // Execute transaction
+      await env.DB.prepare(
+        `UPDATE users SET balance = balance - ?, ammo = ammo + ? WHERE user_id = ?`
+      ).bind(cost, purchaseQty, userId).run();
 
-      // 6. Shield Check (Refunds ammo because they couldn't penetrate the shield)
-      if (targetDb.protection_until && targetDb.protection_until > now) {
-        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\nYour shot bounced off ${targetDisplay}'s protection field.\n<i>(refunded)</i>`);
-        return;
-      }
-
-      // 7. Dead Target Check (Wastes the bullet, 0 payout)
-      if (targetDb.is_alive === 0) {
-        await env.DB.prepare(`UPDATE users SET ammo = ammo - 1 WHERE user_id = ?`).bind(tgShooter.id).run();
-        await sendMessage(chatId, `💀 <b>WASTED AMMO!</b>\n${targetDisplay} is already dead.`);
-        return;
-      }
-
-      // 8. The RNG & Economy Action (95 / 5)
-      const roll = Math.random() * 100;
-
-      if (roll <= 95) {
-        // SUCCESS (95%)
-        const reward = Math.floor(Math.random() * (600 - 400 + 1)) + 400; // Random between 400 and 600
-        
-        // 10% Loot Drop Chance
-        const lootRoll = Math.random() < 0.10;
-        const lootText = lootRoll ? "\n\n📦 <b>SECRET LOOT CRATE DROPPED!</b> <i>(Added to your vault)</i>" : "";
-        if (lootRoll) {
-           await DB_MANAGER.addInventoryItem(env.DB, tgShooter.id, "gold_chain", 1); // Gives them a gold chain if it hits
-        }
-
-        await env.DB.batch([
-          env.DB.prepare(`UPDATE users SET is_alive = 0 WHERE user_id = ?`).bind(targetId),
-          env.DB.prepare(`UPDATE users SET balance = balance + ?, ammo = ammo - 1, kills = kills + 1 WHERE user_id = ?`).bind(reward, tgShooter.id)
-        ]);
-
-        await sendMessage(chatId, `💥 <b>TARGET ELIMINATED!</b>\n\n<blockquote>${tgShooter.first_name} fired a clean shot at ${targetDisplay}.\n\n💰 <b>Bounty Claimed:</b> ₹${reward}${lootText}</blockquote>`);
-      
-      } else {
-        // MISSFIRE (5%)
-        await env.DB.prepare(`UPDATE users SET ammo = ammo - 1 WHERE user_id = ?`).bind(tgShooter.id).run();
-        await sendMessage(chatId, `💨 <b>MISFIRE!</b>\n\n<blockquote>Your weapon jammed! ${targetDisplay} escaped.\n<i>(You lost 1 bullet)</i></blockquote>`);
-      }
+      const card = createStatusCard({
+        title: "🛒 AMMO ACQUIRED",
+        rows: [
+          { label: "👤 BUYER", value: update.message.from.first_name || "Unknown" },
+          { label: "📦 BOUGHT", value: `+${purchaseQty} rounds` },
+          { label: "🔋 TOTAL", value: `${currentAmmo + purchaseQty} rounds` },
+          { label: "💰 CASH", value: `₹${currentBalance - cost}` },
+        ],
+        footer: `✅ RECEIPT • Expended ₹${cost} (₹1/bullet)`,
+      });
+      await sendMessage(chatId, card);
       return;
     }
+
+    // =========================================================================
+    // ╭━━━━━━━━━━━━━━━✪ [COMBAT SYSTEM: /fire, /f]
+    // =========================================================================
+    if (lowerText.startsWith("/fire") || lowerText.startsWith("/f")) {
+      const now = Math.floor(Date.now() / 1000);
+
+      // Ensure shooter exists in DB
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) 
+         VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`
+      ).bind(userId).run();
+
+      const shooter = await env.DB.prepare(
+        `SELECT balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until 
+         FROM users WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first<any>();
+
+      // 1. Lockout and Cooldown Verification
+      if (shooter.fire_lock_until && shooter.fire_lock_until > now) {
+        const remaining = shooter.fire_lock_until - now;
+        const card = createStatusCard({
+          title: "🚨 WEAPON JAMMED",
+          rows: [
+            { label: "👤 SHOOTER", value: update.message.from.first_name || "Unknown" },
+            { label: "⚠️ STATUS", value: "LOCKED OUT" },
+            { label: "⏳ TIME", value: `${remaining}s remaining` },
+          ],
+          footer: "🛑 ANTI-SPAM • 4-minute lockout for spamming triggers.",
+        });
+        await sendMessage(chatId, card);
+        return;
+      }
+
+      // Check spam velocity (less than 2s between triggers)
+      const lastFire = shooter.last_fire_time || 0;
+      let strikes = shooter.fire_spam_strikes || 0;
+      if (now - lastFire < 2) {
+        strikes += 1;
+        if (strikes >= 4) {
+          const lockTime = now + 240; // 4-minute penalty
+          await env.DB.prepare(
+            `UPDATE users SET fire_spam_strikes = 0, fire_lock_until = ?, last_fire_time = ? WHERE user_id = ?`
+          ).bind(lockTime, now, userId).run();
+
+          const card = createStatusCard({
+            title: "🚨 TRIGGER LOCK ENGAGED",
+            rows: [
+              { label: "👤 SHOOTER", value: update.message.from.first_name || "Unknown" },
+              { label: "⚠️ VIOLATION", value: "Spam threshold reached" },
+              { label: "⏳ LOCKOUT", value: "240s penalty" },
+            ],
+            footer: "🛑 ENFORCEMENT • Trigger disabled for 4 minutes.",
+          });
+          await sendMessage(chatId, card);
+          return;
+        } else {
+          await env.DB.prepare(
+            `UPDATE users SET fire_spam_strikes = ?, last_fire_time = ? WHERE user_id = ?`
+          ).bind(strikes, now, userId).run();
+
+          const card = createStatusCard({
+            title: "⚠️ COOLDOWN ACTIVE",
+            rows: [
+              { label: "👤 SHOOTER", value: update.message.from.first_name || "Unknown" },
+              { label: "⚠️ STRIKES", value: `${strikes} / 4` },
+              { label: "⏱️ DELAY", value: "2s required" },
+            ],
+            footer: "⏰ WARNING • Fast clicks will result in a 4-minute lock.",
+          });
+          await sendMessage(chatId, card);
+          return;
+        }
+      } else {
+        // Reset strikes upon valid cooldown interval
+        strikes = 0;
+      }
+
+      // 2. Shooter Status & Ammo Verification
+      if (!shooter.is_alive) {
+        const card = createStatusCard({
+          title: "💀 ACTION DENIED",
+          rows: [
+            { label: "👤 STATUS", value: "KNOCKED OUT" },
+            { label: "🆔 UID", value: userId },
+          ],
+          footer: "💡 HINT • You are dead. Use /revive to re-enter combat.",
+        });
+        await sendMessage(chatId, card);
+        return;
+      }
+
+      if ((shooter.ammo || 0) < 1) {
+        const card = createStatusCard({
+          title: "🚫 CLICK... CLICK...",
+          rows: [
+            { label: "👤 SHOOTER", value: update.message.from.first_name || "Unknown" },
+            { label: "🔋 AMMO", value: "0 rounds" },
+          ],
+          footer: "💡 HINT • Chamber empty. Purchase bullets with /b [amount].",
+        });
+        await sendMessage(chatId, card);
+        return;
+      }
+
+      // 3. Resolve Combat Target
+      let targetId: number | null = update.message.reply_to_message?.from?.id || null;
+      let targetName: string = update.message.reply_to_message?.from?.first_name || "Target";
+
+      if (!targetId && args.length > 0) {
+        const parsedTarget = parseInt(args[0], 10);
+        if (!isNaN(parsedTarget)) {
+          targetId = parsedTarget;
+          targetName = `Target_${targetId}`;
+        }
+      }
+
+      if (!targetId) {
+        await sendMessage(
+          chatId,
+          "❌ <b>Target required.</b> Reply to an enemy message or supply their numeric ID (e.g. <code>/fire 123456789</code>)."
+        );
+        return;
+      }
+
+      if (targetId === userId) {
+        await sendMessage(chatId, "❌ You cannot pull the trigger on yourself.");
+        return;
+      }
+
+      // 4. Target Verification & Active Shield Check
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) 
+         VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`
+      ).bind(targetId).run();
+
+      const target = await env.DB.prepare(
+        `SELECT balance, is_alive, protection_until FROM users WHERE user_id = ? LIMIT 1`
+      ).bind(targetId).first<any>();
+
+      if (!target || !target.is_alive) {
+        await sendMessage(chatId, `❌ <b>Target already down.</b> ${targetName} is already eliminated.`);
+        return;
+      }
+
+      // Shield defense check
+      if (target.protection_until && target.protection_until > now) {
+        // Safe encounter: refund ammo, update cooldown timestamp
+        await env.DB.prepare(
+          `UPDATE users SET last_fire_time = ?, fire_spam_strikes = 0 WHERE user_id = ?`
+        ).bind(now, userId).run();
+
+        const card = createStatusCard({
+          title: "🛡️ TARGET DEFENDED",
+          rows: [
+            { label: "🔫 SHOOTER", value: update.message.from.first_name || "Unknown" },
+            { label: "🎯 TARGET", value: targetName },
+            { label: "🛡️ SHIELD", value: "ACTIVE" },
+            { label: "🔋 AMMO", value: "Preserved (100%)" },
+          ],
+          footer: "🛡️ DEFENSE • Shot deflected by Underworld protection.",
+        });
+        await sendMessage(chatId, card);
+        return;
+      }
+
+      // 5. Consume 1 Round & Execute RNG Hit Calculation (95% Success, 5% Misfire)
+      const roll = Math.random() * 100;
+      const isMisfire = roll < 5;
+
+      if (isMisfire) {
+        await env.DB.prepare(
+          `UPDATE users SET ammo = ammo - 1, last_fire_time = ?, fire_spam_strikes = 0 WHERE user_id = ?`
+        ).bind(now, userId).run();
+
+        const card = createStatusCard({
+          title: "💨 MISFIRE!",
+          rows: [
+            { label: "🔫 SHOOTER", value: update.message.from.first_name || "Unknown" },
+            { label: "🎯 TARGET", value: targetName },
+            { label: "🎲 RNG ROLL", value: `${roll.toFixed(1)}% (Misfire)` },
+            { label: "🔋 AMMO", value: `${shooter.ammo - 1} left` },
+          ],
+          footer: "⚠️ MALFUNCTION • Round jammed in the chamber. Target escapes.",
+        });
+        await sendMessage(chatId, card);
+        return;
+      }
+
+      // 6. Successful Elimination & Loot Calculation
+      // Reward: 20% of target balance (min ₹100, max ₹5,000)
+      const stolenCash = Math.min(Math.max(Math.floor((target.balance || 0) * 0.2), 100), 5000);
+
+      await env.DB.batch([
+        // Shooter: -1 ammo, +1 kill, +stolenCash, update timer
+        env.DB.prepare(
+          `UPDATE users SET ammo = ammo - 1, kills = kills + 1, balance = balance + ?, last_fire_time = ?, fire_spam_strikes = 0 WHERE user_id = ?`
+        ).bind(stolenCash, now, userId),
+        // Target: knocked out, lose stolenCash
+        env.DB.prepare(
+          `UPDATE users SET is_alive = 0, balance = MAX(0, balance - ?) WHERE user_id = ?`
+        ).bind(stolenCash, targetId),
+      ]);
+
+      const card = createStatusCard({
+        title: "💥 CONTRACT EXECUTED",
+        rows: [
+          { label: "🔫 SHOOTER", value: update.message.from.first_name || "Unknown" },
+          { label: "🎯 TARGET", value: targetName },
+          { label: "💀 STATUS", value: "ELIMINATED" },
+          { label: "💰 LOOT", value: `+₹${stolenCash}` },
+          { label: "🔋 AMMO", value: `${shooter.ammo - 1} left` },
+        ],
+        footer: "⏰ COOLDOWN • 2s active • 1 round expended",
+      });
+      await sendMessage(chatId, card);
+      return;
+    }
+
+
     // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
 
 
     // ====================================================
-    // ╭━━━━━━━━━━━━━━━✪ [CHECK AMMO FEATURE]
-    if (text.toLowerCase() === "/b" || text.toLowerCase() === "/bullets" || text.toLowerCase() === "/ammo") {
-      // Ensure user exists in DB so we don't get a null error
-      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until) VALUES (?, 1000, 1, 0, 0, 0, 0, 0)`).bind(userId).run();
-      
-      const user = await env.DB.prepare(`SELECT ammo FROM users WHERE user_id = ? LIMIT 1`).bind(userId).first<any>();
-      
-      const ammoCount = user ? user.ammo : 0;
-      
-      await sendMessage(chatId, `🔫 <b>AMMO INVENTORY</b>\n\n<blockquote>Boss, you currently have <b>${ammoCount}</b> bullets left in your magazine.</blockquote>`);
-      return;
-    }
-    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
+    // ╭━━━━━━━━━━━━━━━✪ [ROB COMMAND HANDLER]
+    // ====================================================
 
-
-// ====================================================
-    // ╭━━━━━━━━━━━━━━━✪ [THE ROB / RAID MECHANIC]
     if (text.startsWith("/rob")) {
       const now = Math.floor(Date.now() / 1000);
-      const tgRaider = update.message.from;
-      const messageId = update.message.message_id;
-      const replyTo = update.message.reply_to_message;
 
-      // 1. Parse Command
-      const cleanText = text.replace(/^\/rob(?:@\S+)?/i, "").trim();
-      const parts = cleanText.split(/\s+/).filter(Boolean);
-      const parsedAmount = parts[0] ? parseInt(parts[0], 10) : NaN;
-      const parsedId = parts[1] ? parseInt(parts[1], 10) : NaN;
+      // 1. Identify Target (Reply or ID Argument)
+      let targetId: number | null = update.message.reply_to_message?.from?.id || null;
+      let targetDisplay: string = update.message.reply_to_message?.from?.first_name || "Unknown";
 
-      const amount = (!isNaN(parsedAmount) && parsedAmount > 0) ? parsedAmount : 500;
-      let targetId: number | null = null;
-      let targetDisplay = "";
+const idArg = args.find((a: string) => !isNaN(parseInt(a)) && a.length > 6);
+      if (idArg) {
+        targetId = parseInt(idArg);
+        targetDisplay = `Target [${targetId}]`;
+      }
 
-      if (replyTo && replyTo.from) {
-        targetId = replyTo.from.id;
-        targetDisplay = replyTo.from.username ? `@${replyTo.from.username}` : replyTo.from.first_name;
-      } else if (!isNaN(parsedId) && parsedId > 0) {
-        targetId = parsedId;
-        targetDisplay = `ID: <code>${parsedId}</code>`;
-      } else {
-        await sendMessage(chatId, "❌ <b>Usage:</b> <code>/rob [amount] [id]</code>\nOr reply to a user's message with <code>/rob [amount]</code>.");
+      if (!targetId) {
+        await sendMessage(
+          chatId,
+          "❌ <b>Target Required</b>\n\n<blockquote>Reply to a player's message or specify their user ID to rob them.\nUsage: <code>/rob [id]</code> or reply with <code>/rob</code></blockquote>"
+        );
         return;
       }
 
-      if (targetId === tgRaider.id) {
-        await sendMessage(chatId, "❌ Don't rob Yourself.");
+      // 2. Prevent Self-Robbery
+      if (targetId === userId) {
+        await sendMessage(chatId, "❌ You cannot rob yourself.");
         return;
       }
 
-      // 2. Fetch/Upsert Raider
-      await env.DB.prepare(`INSERT OR IGNORE INTO users (user_id, balance, last_raid_time, raid_spam_strikes, raid_lock_until) VALUES (?, 0, 0, 0, 0)`).bind(tgRaider.id).run();
-      const raider = await env.DB.prepare(`SELECT * FROM users WHERE user_id = ? LIMIT 1`).bind(tgRaider.id).first<any>();
+      // 3. Ensure Raider Exists & Is Alive
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills, ammo, last_fire_time, fire_spam_strikes, fire_lock_until, protection_until)
+         VALUES (?, 1000, 1, 0, 0, 0, 0, 0, 0)`
+      ).bind(userId).run();
 
-      // 3. Anti-Spam Gate
-      if (raider.raid_lock_until > now) {
-        const remaining = raider.raid_lock_until - now;
-        const mins = Math.floor(remaining / 60);
-        const secs = remaining % 60;
-        await sendMessage(chatId, `🔒 <b>LOCKED OUT!</b>\nYou spammed /rob too fast. Wait <b>${mins}m ${secs}s</b>.`);
+      const raider = await env.DB.prepare(
+        `SELECT balance, is_alive FROM users WHERE user_id = ? LIMIT 1`
+      ).bind(userId).first<any>();
+
+      if (!raider || !raider.is_alive) {
+        await sendMessage(
+          chatId,
+          "💀 <b>KNOCKED OUT</b>\n\n<blockquote>You are currently incapacitated. Use /revive before committing crimes.</blockquote>"
+        );
         return;
       }
 
-      const timeSinceLast = now - raider.last_raid_time;
-      if (timeSinceLast < 2) { // 2 Second Cooldown
-        const newStrikes = raider.raid_spam_strikes + 1;
-        if (newStrikes >= 4) {
-          const lockUntil = now + 240; // 4 Minutes
-          await env.DB.prepare(`UPDATE users SET raid_spam_strikes = 0, raid_lock_until = ? WHERE user_id = ?`).bind(lockUntil, tgRaider.id).run();
-          await sendMessage(chatId, `⛔ <b>LOCKOUT TRIGGERED!</b>\nYou hit the spam limit. You are banned from robbing for 4 minutes.`);
-        } else {
-          await env.DB.prepare(`UPDATE users SET raid_spam_strikes = ? WHERE user_id = ?`).bind(newStrikes, tgRaider.id).run();
-          await sendMessage(chatId, `⚠️ <b>Slow down!</b> Strike <b>${newStrikes}/4</b>. Hit 4 and you are locked out.`);
-        }
-        return;
-      }
+      // 4. Fetch Target & Enforce Shield Check
+      const targetDb = await env.DB.prepare(
+        `SELECT balance, is_alive, protection_until FROM users WHERE user_id = ? LIMIT 1`
+      ).bind(targetId).first<any>();
 
-      // Update last active time safely
-      await env.DB.prepare(`UPDATE users SET raid_spam_strikes = 0, last_raid_time = ? WHERE user_id = ?`).bind(now, tgRaider.id).run();
-
-      // 4. Target Check
-      // FIX: Now fetching protection_until to enforce the shield
-      const targetDb = await env.DB.prepare(`SELECT balance, protection_until FROM users WHERE user_id = ? LIMIT 1`).bind(targetId).first<any>();
       if (!targetDb) {
         await sendMessage(chatId, "❌ Target not found in the Underworld database.");
         return;
       }
 
-      // 🛡️ THE IMPENETRABLE SHIELD FIX
+      // Active Shield Check
       if (targetDb.protection_until && targetDb.protection_until > now) {
-        await sendMessage(chatId, `🛡️ <b>TARGET SHIELDED!</b>\n\n<blockquote>${targetDisplay} has active Underworld Protection.\nYour robbery attempt was blocked by their security forces.</blockquote>`);
+        const remainingMinutes = Math.ceil((targetDb.protection_until - now) / 60);
+        await sendMessage(
+          chatId,
+          `🛡️ <b>TARGET PROTECTED</b>\n\n<blockquote>${targetDisplay} has active Underworld Protection.\nRobbery blocked by their private security (${remainingMinutes}m remaining).</blockquote>`
+        );
         return;
       }
 
+      // Check Target Minimum Funds
       if (targetDb.balance < 100) {
-        await sendMessage(chatId, `❌ <b>Target is too poor.</b> They only have ₹${targetDb.balance}. Not worth the risk.`);
+        await sendMessage(
+          chatId,
+          `❌ <b>Pockets Empty</b>\n\n<blockquote>Target only has ₹${targetDb.balance}. Not worth the risk.</blockquote>`
+        );
         return;
       }
 
+      // 5. Robbery RNG & Calculation (65% Success Rate)
+      const isSuccess = Math.random() < 0.65;
+      const raiderName = update.message.from.first_name || "Raider";
 
-      // 5. The RNG & Economy
-      const cappedAmount = Math.min(amount, targetDb.balance);
-      const roll = Math.random() * 100;
+      if (!isSuccess) {
+        // Robbery Failed: Small penalty fine of ₹50
+        const penalty = Math.min(50, raider.balance);
+        await env.DB.prepare(
+          `UPDATE users SET balance = MAX(0, balance - ?) WHERE user_id = ?`
+        ).bind(penalty, userId).run();
 
-      if (roll < 90) {
-        // SUCCESS (90%)
-        await env.DB.batch([
-          env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(cappedAmount, targetId),
-          env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE user_id = ?`).bind(cappedAmount, tgRaider.id)
-        ]);
-        await sendMessage(chatId, `🎭 <b>HEIST SUCCESSFUL!</b>\n\n<blockquote>${tgRaider.first_name} slipped into the shadows and stole <b>₹${cappedAmount}</b> from ${targetDisplay}.\n<i>Clean exit. No witnesses.</i></blockquote>`);
-      
-      } else if (roll < 95) {
-        // FAILURE (5%)
-        const fivePercent = Math.floor(raider.balance * 0.05);
-        const penalty = fivePercent >= 100 ? fivePercent : 100; // The -100 Broke Debt Rule!
-        await env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(penalty, tgRaider.id).run();
-        
-        const brokeMsg = raider.balance < 100 ? "\n<i>You were already broke. Your account is now in negative debt!</i>" : "";
-        await sendMessage(chatId, `🚨 <b>BUSTED BY SECURITY!</b>\n\n<blockquote>${tgRaider.first_name} tripped the alarms trying to hit ${targetDisplay}!\n\n💸 <b>Penalty:</b> ₹${penalty} burned to ash.${brokeMsg}</blockquote>`);
-      
-      } else {
-        // JACKPOT (5%)
-        const totalGain = cappedAmount + 2000;
-        await env.DB.batch([
-          env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(cappedAmount, targetId),
-          env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE user_id = ?`).bind(totalGain, tgRaider.id)
-        ]);
-        await sendMessage(chatId, `💎 <b>JACKPOT HEIST!</b>\n\n<blockquote>${tgRaider.first_name} pulled off the raid of the century against ${targetDisplay}!\n\n💰 Stolen: <b>₹${cappedAmount}</b>\n✨ Bonus Minted: <b>₹2000</b>\n🏆 Total Haul: <b>₹${totalGain}</b></blockquote>`);
+        const failCard = createStatusCard({
+          title: "🚨 HEIST FAILED",
+          rows: [
+            { label: "👤 RAIDER", value: raiderName },
+            { label: "🎯 TARGET", value: targetDisplay.replace(/<[^>]*>/g, "") },
+            { label: "⚠️ RESULT", value: "Busted by Cops" },
+            { label: "💸 PENALTY", value: `-₹${penalty}` },
+            { label: "💼 WALLET", value: `₹${Math.max(0, raider.balance - penalty)}` },
+          ],
+          footer: "⏰ COOLDOWN • Security alarms triggered • Be cautious",
+        });
+
+        await sendMessage(chatId, failCard);
+        return;
       }
+
+      // Robbery Succeeded: Steal 15% to 30% of target balance (Capped at ₹5,000 per attempt)
+      const stealPercentage = 0.15 + Math.random() * 0.15;
+      const stolenAmount = Math.min(5000, Math.max(10, Math.floor(targetDb.balance * stealPercentage)));
+
+      // 6. Atomic Ledger Balance Updates
+      await env.DB.batch([
+        env.DB.prepare(`UPDATE users SET balance = balance - ? WHERE user_id = ?`).bind(stolenAmount, targetId),
+        env.DB.prepare(`UPDATE users SET balance = balance + ? WHERE user_id = ?`).bind(stolenAmount, userId),
+      ]);
+
+      const successCard = createStatusCard({
+        title: "🎭 HEIST SUCCESSFUL",
+        rows: [
+          { label: "👤 RAIDER", value: raiderName },
+          { label: "🎯 TARGET", value: targetDisplay.replace(/<[^>]*>/g, "") },
+          { label: "💰 STOLEN", value: `₹${stolenAmount}` },
+          { label: "💼 WALLET", value: `₹${raider.balance + stolenAmount}` },
+        ],
+        footer: "⏰ ESCAPE • Clean getaway • No evidence left behind",
+      });
+
+      await sendMessage(chatId, successCard);
       return;
     }
-
-    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
-
+    // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END ROB COMMAND
 
 // ====================================================
     // ╭━━━━━━━━━━━━━━━✪ [SELL FEATURE]
@@ -826,133 +1026,252 @@ ${UI.BORDER_BOT}`;
     
 // ====================================================
     // --- PROMOTE ---
+
     if (text.startsWith("/promote")) {
-      if (!isHighAdmin) return;
-      
-      let targetId = update.message.reply_to_message?.from.id;
-      let level = 1;
+      // 1. Permission Gatekeeper
+      const isOwner = userId === Number(CONFIG.OWNER_ID);
+      const callerAdmin = await DB_MANAGER.getAdmin(env.DB, chatId, userId);
+      const isHighAdmin = isOwner || (callerAdmin !== null && callerAdmin.level >= 3);
+      const reply = update.message?.reply_to_message;
 
-      // Priority Logic: Check if ID is given in args
-      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
-      const lvlArg = args.find(a => ["1","2","3"].includes(a));
-      
-      if (idArg) targetId = parseInt(idArg);
-      if (lvlArg) level = parseInt(lvlArg);
-
-      if (!targetId) {
-        await sendMessage(chatId, "❌ Reply to user or provide an ID.");
+      if (!isHighAdmin) {
+        await sendMessage(chatId, "❌ <b>Access Denied:</b> Only Owner and Level 3 Admins can promote users.");
         return;
       }
 
-      // 1. Tell Telegram to execute the promotion
-      try {
-        const response = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            chat_id: chatId, 
-            user_id: targetId, 
-            can_manage_chat: true,
-            can_delete_messages: true,
-            can_invite_users: true,
-            can_restrict_members: true,
-            can_pin_messages: true,
-            can_manage_video_chats: true
-          })
-        });
-        const data = await response.json();
-        
-        if (!data.ok) {
-           await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${data.description}\n<i>(Ensure the bot has "Add New Admins" permission!)</i>`);
-           return;
-        }
-      } catch (e) {
-        await sendMessage(chatId, "❌ Failed to connect to Telegram API.");
+      // 2. Resolve Target User and Level
+      let targetUserId: number | null = null;
+      let targetName = "User";
+
+      if (update.message?.reply_to_message?.from) {
+        targetUserId = update.message.reply_to_message.from.id;
+        targetName = update.message.reply_to_message.from.first_name || "User";
+      }
+
+      const idArg = args.find((a: string) => !isNaN(parseInt(a)) && a.length > 7);
+      const lvlArg = args.find((a: string) => ["1", "2", "3"].includes(a));
+
+      if (idArg) {
+        targetUserId = parseInt(idArg);
+        targetName = `ID:${targetUserId}`;
+      }
+
+      if (!targetUserId) {
+        await sendMessage(
+          chatId,
+          "⚠️ <b>Usage:</b> Reply to a user with <code>/promote [1|2|3]</code> or provide an ID: <code>/promote [id] [1|2|3]</code>"
+        );
         return;
       }
 
-      // 2. Update Internal Database
-      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, level, "Admin");
-      await sendMessage(chatId, `✅ <b>PROMOTED!</b>\nUser <code>${targetId}</code> is now a Telegram Admin and a Level ${level} Underworld Admin.`);
+      const targetLevel = lvlArg ? parseInt(lvlArg) : 1;
+
+      // 3. Telegram API Sync
+      const response = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          user_id: targetUserId,
+          can_manage_chat: true,
+          can_delete_messages: true,
+          can_manage_video_chats: true,
+          can_restrict_members: targetLevel >= 2,
+          can_promote_members: targetLevel >= 3,
+          can_change_info: targetLevel >= 2,
+          can_invite_users: true,
+          can_pin_messages: true,
+        }),
+      });
+
+      const data = (await response.json()) as any;
+
+      if (!data.ok) {
+        await sendMessage(
+          chatId,
+          `❌ <b>Telegram Error:</b> ${data.description}\n<i>(Ensure the bot has "Add New Admins" permission!)</i>`
+        );
+        return;
+      }
+
+      // 4. Database Sync
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetUserId, targetLevel, `Level ${targetLevel} Admin`);
+
+      // 5. Standardized UI Output
+      const card = createStatusCard({
+        title: "⭐ PROMOTION SUCCESSFUL",
+        rows: [
+          { label: "👤 ADMIN", value: targetName },
+          { label: "🆔 UID", value: targetUserId },
+          { label: "🔰 LEVEL", value: `Level ${targetLevel}` },
+          {
+            label: "🛡️ PERMS",
+            value: targetLevel === 3 ? "Full Admin" : targetLevel === 2 ? "Moderator" : "Junior Admin",
+          },
+        ],
+        footer: "👑 SYSTEM • Privileges synchronized with Telegram API",
+      });
+
+      await sendMessage(chatId, card);
       return;
     }
 
 // ====================================================
-    // --- DEMOTE ---
+
+    // ==========================================
+    // 🛡️ ADMIN: /demote
+    // ==========================================
     if (text.startsWith("/demote")) {
+      const isOwner = userId === Number(CONFIG.OWNER_ID);
+      const callerAdmin = await DB_MANAGER.getAdmin(env.DB, chatId, userId);
+      const isHighAdmin = isOwner || (callerAdmin !== null && callerAdmin.level >= 3);
+      const reply = update.message?.reply_to_message;
+
       if (!isHighAdmin) return;
-      let targetId = update.message.reply_to_message?.from.id;
-      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
-      if (idArg) targetId = parseInt(idArg);
 
-      if (!targetId) return;
+      const idArg = args.find((a: string) => !isNaN(parseInt(a)) && a.length > 7);
+      let targetUserId: number | null = null;
+      let targetName = "Player";
 
-      // 1. Tell Telegram to strip all Admin rights
-      try {
-        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            chat_id: chatId, 
-            user_id: targetId, 
-            can_manage_chat: false,
-            can_change_info: false,
-            can_delete_messages: false,
-            can_invite_users: false,
-            can_restrict_members: false,
-            can_pin_messages: false,
-            can_manage_video_chats: false,
-            can_promote_members: false
-          })
-        });
-      } catch (e) {}
+      if (reply) {
+        targetUserId = reply.from.id;
+        targetName = reply.from.first_name;
+      } else if (idArg) {
+        targetUserId = parseInt(idArg);
+        targetName = `User (${idArg})`;
+      }
 
-      // 2. Update Internal Database
-      await DB_MANAGER.removeAdmin(env.DB, chatId, targetId);
-      await sendMessage(chatId, `❌ <b>DEMOTED!</b>\nUser <code>${targetId}</code> stripped of all Admin rights.`);
-      return;
-    }
-
-// ====================================================
-    // --- TITLE ---
-    if (text.startsWith("/title")) {
-      if (!isHighAdmin) return;
-      let targetId = update.message.reply_to_message?.from.id;
-      let titleName = args.filter(a => isNaN(parseInt(a)) || a.length < 7).join(" ");
-      const idArg = args.find(a => !isNaN(parseInt(a)) && a.length > 7);
-      if (idArg) targetId = parseInt(idArg);
-
-      if (!targetId || !titleName) {
-        await sendMessage(chatId, "❌ Usage: /title [name] [id/reply]");
+      if (!targetUserId) {
+        await sendMessage(chatId, "⚠️ <b>Usage:</b> Reply to a user with <code>/demote</code> or specify an ID: <code>/demote [id]</code>");
         return;
       }
 
-      // 1. Tell Telegram to set the Title (Requires the user to be an admin first)
-      try {
-        // Ensure they have base admin rights first
-        await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, user_id: targetId, can_manage_chat: true })
-        });
-        
-        // Apply the custom title
-        const titleRes = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/setChatAdministratorCustomTitle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, user_id: targetId, custom_title: titleName })
-        });
-        
-        const titleData = await titleRes.json();
-        if (!titleData.ok) {
-           await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${titleData.description}\n<i>(Bot needs 'Add Admins' right!)</i>`);
-           return;
-        }
-      } catch (e) {}
+      // Revoke all permissions on Telegram
+      const response = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          user_id: targetUserId,
+          can_manage_chat: false,
+          can_change_info: false,
+          can_post_messages: false,
+          can_edit_messages: false,
+          can_delete_messages: false,
+          can_invite_users: false,
+          can_restrict_members: false,
+          can_pin_messages: false,
+          can_promote_members: false,
+          can_manage_video_chats: false,
+          can_manage_voice_chats: false,
+          is_anonymous: false,
+        }),
+      });
 
-      // 2. Update Internal Database
-      await DB_MANAGER.setAdmin(env.DB, chatId, targetId, 1, titleName);
-      await sendMessage(chatId, `🏷️ <b>TITLE UPDATED!</b>\nTarget <code>${targetId}</code> is now officially tagged as: <b>${titleName}</b>`);
+      const data = (await response.json()) as any;
+
+      if (!data.ok) {
+        await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${data.description}\n<i>(Ensure the bot has permission to manage administrators!)</i>`);
+        return;
+      }
+
+      // Remove admin privileges from database
+      await DB_MANAGER.removeAdmin(env.DB, chatId, targetUserId);
+
+      const card = createStatusCard({
+        title: "🛡️ ADMIN DEMOTED",
+        rows: [
+          { label: "👤 TARGET", value: targetName },
+          { label: "🆔 UID", value: targetUserId },
+          { label: "🎖️ RANK", value: "Revoked" },
+          { label: "👮 BY", value: update.message.from.first_name },
+        ],
+        footer: "⚡ STATUS • Privileges stripped successfully",
+      });
+
+      await sendMessage(chatId, card);
+      return;
+    }
+
+    // ==========================================
+    // 🏷️ ADMIN: /title
+    // ==========================================
+    if (text.startsWith("/title")) {
+      const isOwner = userId === Number(CONFIG.OWNER_ID);
+      const callerAdmin = await DB_MANAGER.getAdmin(env.DB, chatId, userId);
+      const isHighAdmin = isOwner || (callerAdmin !== null && callerAdmin.level >= 3);
+      const reply = update.message?.reply_to_message;
+
+      if (!isHighAdmin) return;
+
+      let titleName = args.filter((a: string) => isNaN(parseInt(a)) || a.length < 7).join(" ");
+      const idArg = args.find((a: string) => !isNaN(parseInt(a)) && a.length > 7);
+
+      let targetUserId: number | null = null;
+      let targetName = "Player";
+
+      if (reply) {
+        targetUserId = reply.from.id;
+        targetName = reply.from.first_name;
+      } else if (idArg) {
+        targetUserId = parseInt(idArg);
+        targetName = `User (${idArg})`;
+      }
+
+      if (!targetUserId || !titleName.trim()) {
+        await sendMessage(chatId, "⚠️ <b>Usage:</b> Reply to an admin with <code>/title [Custom Title]</code> or <code>/title [Custom Title] [id]</code>");
+        return;
+      }
+
+      // Truncate custom title to 16 characters (Telegram API limit)
+      titleName = titleName.trim().slice(0, 16);
+
+      // Verify the member is promoted first
+      await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/promoteChatMember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          user_id: targetUserId,
+          can_manage_chat: true,
+        }),
+      });
+
+      // Assign the custom badge/title
+      const titleRes = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/setChatAdministratorCustomTitle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          user_id: targetUserId,
+          custom_title: titleName,
+        }),
+      });
+
+      const titleData = (await titleRes.json()) as any;
+
+      if (!titleData.ok) {
+        await sendMessage(chatId, `❌ <b>Telegram Error:</b> ${titleData.description}\n<i>(Bot needs 'Add Admins' right!)</i>`);
+        return;
+      }
+
+      // Sync updated title to database
+      const existingAdmin = await DB_MANAGER.getAdmin(env.DB, chatId, targetUserId);
+      const currentLevel = existingAdmin ? existingAdmin.level : 1;
+      await DB_MANAGER.setAdmin(env.DB, chatId, targetUserId, currentLevel, titleName);
+
+      const card = createStatusCard({
+        title: "🏷️ TITLE UPDATED",
+        rows: [
+          { label: "👤 TARGET", value: targetName },
+          { label: "🆔 UID", value: targetUserId },
+          { label: "🏷️ TITLE", value: titleName },
+          { label: "👮 BY", value: update.message.from.first_name },
+        ],
+        footer: "⚡ STATUS • Telegram badge synced successfully",
+      });
+
+      await sendMessage(chatId, card);
       return;
     }
 
