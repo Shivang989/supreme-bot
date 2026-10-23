@@ -71,6 +71,40 @@ export const GAME = {
     await DB_MANAGER.ensureUserExists(env.DB, userId);
 
 
+    // ==========================================
+    // 👋 WELCOME NEW MEMBERS
+    // ==========================================
+    if (update.message?.new_chat_members && update.message.new_chat_members.length > 0) {
+      for (const member of update.message.new_chat_members) {
+        // Sanitize name for HTML parsing
+        const safeName = member.first_name
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+
+        // Clickable mention link
+        const mention = `<a href="tg://user?id=${member.id}">${safeName}</a>`;
+        const entityType = member.is_bot ? "Automaton / Bot" : "Operative";
+
+        // Auto-register member into D1 database
+        await DB_MANAGER.ensureUserExists(env.DB, member.id);
+
+        const welcomeCard = createStatusCard({
+          title: "🚨 NEW OPERATIVE DETECTED",
+          rows: [
+            { label: "👤 NAME", value: member.first_name },
+            { label: "🆔 UID", value: member.id },
+            { label: "🏷️ TYPE", value: entityType },
+            { label: "🔫 AMMO", value: "0 rounds" },
+          ],
+          footer: `Welcome ${mention}! Lock & load. Type /help to view commands.`,
+        });
+
+        await sendMessage(chatId, welcomeCard);
+      }
+      return;
+    }
+
 
 //=====================================================
    // ╭━━━━━━━━━━━━━━━✪ [START FEATURE]
