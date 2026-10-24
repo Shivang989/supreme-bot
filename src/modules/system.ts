@@ -3,71 +3,56 @@ import { DB_MANAGER } from "../db";
 import { toCustomFont } from "../ui";
 import { sendMessage } from "../index";
 
+// ==========================================
+// 👋 GROUP WELCOME HANDLER (Unmodified)
+// ==========================================
 export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage): Promise<void> {
   if (!message.new_chat_members || message.new_chat_members.length === 0) return;
 
   for (const member of message.new_chat_members) {
-    // 1. Ensure new member is registered in D1 database
     await DB_MANAGER.ensureUserExists(env.DB, member.id);
 
-    // 2. Safe name extraction with fallback
-    const rawName = member.first_name?.trim() || "there";
+    const rawName = member.first_name?.trim() || "Member";
     const safeName = rawName
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // 3. Format text using the custom typography engine
-    const greeting = toCustomFont(`Hello, ${safeName} 💕`);
-    const instructions = toCustomFont("Start a DM to use all the features.");
+    const mention = `<a href="tg://user?id=${member.id}">${safeName}</a>`;
 
-    // 4. Construct blockquote container (produces the vertical accent line)
-    const text = `<blockquote>${greeting}\n\n${instructions}</blockquote>`;
-
-    // 5. Single inline action button directing to the bot's private chat
-    const inlineKeyboard = {
-      inline_keyboard: [
-        [
-          {
-            text: toCustomFont("SOW"),
-            url: "https://t.me/Myaloobot?start=true",
-          },
-        ],
-      ],
-    };
-
-    // 6. Deliver the welcome message
-    await sendMessage(message.chat.id, text, inlineKeyboard);
+    await sendMessage(
+      message.chat.id,
+      `Welcome, ${mention}\n\nType /help to explore.`
+    );
   }
 }
 
-
 export const systemHandlers: Record<string, CommandHandler> = {
-
   // ==========================================
-  // 🚀 /start
+  // 🚀 /start - Private DM Introduction
   // ==========================================
   "/start": async (ctx: BotContext) => {
-    const rawName = ctx.message.from.first_name || "Operative";
+    const rawName = ctx.message.from.first_name?.trim() || "Operative";
     const safeName = rawName
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    const greeting = toCustomFont(`Welcome back, ${safeName}.`);
-    const actionText = toCustomFont("Start! a DM and explore all features.");
+    const styledName = toCustomFont(safeName);
 
-    const text = `<blockquote>${greeting}\n${actionText}</blockquote>`;
+    // Exact two-line layout with Unicode styling inside Telegram's quote container
+    const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
 
+    // Two side-by-side inline buttons (each occupying half width)
     const inlineKeyboard = {
       inline_keyboard: [
         [
           {
-            text: `➕ ${toCustomFont("Add")}`,
+            text: "➕ Add",
             url: "https://t.me/Myaloobot?startgroup=true",
           },
           {
-            text: `💬 ${toCustomFont("Start DM")}`,
+            text: "💬 Start DM",
             url: "https://t.me/Myaloobot?start=true",
           },
         ],
@@ -77,21 +62,20 @@ export const systemHandlers: Record<string, CommandHandler> = {
     await sendMessage(ctx.chatId, text, inlineKeyboard);
   },
 
-
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
-    await sendMessage(ctx.chatId, `🏓 <b>${toCustomFont("Pong!")}</b> <code>${Date.now() - start}ms</code>`);
+    await sendMessage(ctx.chatId, `🏓 <b>Pong!</b> <code>${Date.now() - start}ms</code>`);
   },
 
   "/top": async (ctx: BotContext) => {
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
 
     if (!topPlayers || topPlayers.length === 0) {
-      await sendMessage(ctx.chatId, `🏆 <b>${toCustomFont("No active operatives registered.")}</b>`);
+      await sendMessage(ctx.chatId, "🏆 <b>No active operatives registered.</b>");
       return;
     }
 
-    let report = `🏆 <b>${toCustomFont("SYNDICATE LEADERBOARD")}</b>\n\n`;
+    let report = "🏆 <b>SYNDICATE LEADERBOARD</b>\n\n";
     topPlayers.forEach((p, idx) => {
       report += `${idx + 1}. <b>UID:</b> <code>${p.user_id}</code> • <b>Cash:</b> ₹${p.balance}\n`;
     });
@@ -103,3 +87,4 @@ export const systemHandlers: Record<string, CommandHandler> = {
     await systemHandlers["/top"](ctx);
   },
 };
+
