@@ -1,6 +1,6 @@
 import { BotContext, CommandHandler, CloudflareEnv, TelegramMessage } from "../types";
 import { DB_MANAGER } from "../db";
-import { createStatusCard } from "../ui";
+import { toCustomFont } from "../ui";
 import { sendMessage } from "../index";
 
 export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage): Promise<void> {
@@ -23,49 +23,59 @@ export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage
 }
 
 export const systemHandlers: Record<string, CommandHandler> = {
+  // ==========================================
+  // 👑 /start - Classic Underworld Terminal
+  // ==========================================
   "/start": async (ctx: BotContext) => {
-    await sendMessage(ctx.chatId, `Operative verified. Use /help for available operations.`);
-  },
+    const rawName = ctx.message.from.first_name || "Operative";
+    const safeName = rawName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  "/help": async (ctx: BotContext) => {
-    await sendMessage(
-      ctx.chatId,
-      `<b>Command Directory:</b>\n\n` +
-      `• <b>Economy:</b> /b, /pay, /rob, /daily, /market, /sell, /inv\n` +
-      `• <b>Combat:</b> /fire, /defend, /revive\n` +
-      `• <b>Arcade:</b> /dice, /flip, /rps, /8ball\n` +
-      `• <b>Management:</b> /me, /top, /admins, /promote, /demote, /title`
-    );
+    const title = toCustomFont("THE UNDERWORLD TERMINAL");
+    const greeting = toCustomFont(`Welcome back, ${safeName}.`);
+    const line1 = toCustomFont("Connection established. All systems are green.");
+    const line2 = toCustomFont("Start! a DM and explore all features.");
+
+    const text =
+      `👑 <b>${title}</b>\n\n` +
+      `<blockquote>${greeting}\n${line1}\n${line2}</blockquote>`;
+
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: `➕ ${toCustomFont("Add")}`,
+            url: "https://t.me/Myaloobot?startgroup=true",
+          },
+          {
+            text: `💬 ${toCustomFont("Start DM")}`,
+            url: "https://t.me/Myaloobot?start=true",
+          },
+        ],
+      ],
+    };
+
+    await sendMessage(ctx.chatId, text, inlineKeyboard);
   },
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
-    await sendMessage(ctx.chatId, `🏓 <b>Pong!</b> Latency: <code>${Date.now() - start}ms</code>`);
+    await sendMessage(ctx.chatId, `🏓 <b>${toCustomFont("Pong!")}</b> <code>${Date.now() - start}ms</code>`);
   },
 
-  // ==========================================
-  // 🏆 /top or /leaderboard - Highest Net Worth
-  // ==========================================
   "/top": async (ctx: BotContext) => {
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
 
     if (!topPlayers || topPlayers.length === 0) {
-      await sendMessage(ctx.chatId, "🏆 <b>No active operatives on the leaderboard yet.</b>");
+      await sendMessage(ctx.chatId, `🏆 <b>${toCustomFont("No active operatives registered.")}</b>`);
       return;
     }
 
-    const rows = topPlayers.map((p, index) => ({
-      label: `#${index + 1} UID:${p.user_id}`.slice(0, 10),
-      value: `₹${p.balance}`,
-    }));
-
-    const card = createStatusCard({
-      title: "🏆 SYNDICATE LEADERBOARD",
-      rows,
-      footer: "⚡ Ranked by total liquid cash in the underworld.",
+    let report = `🏆 <b>${toCustomFont("SYNDICATE LEADERBOARD")}</b>\n\n`;
+    topPlayers.forEach((p, idx) => {
+      report += `${idx + 1}. <b>UID:</b> <code>${p.user_id}</code> • <b>Cash:</b> ₹${p.balance}\n`;
     });
 
-    await sendMessage(ctx.chatId, card);
+    await sendMessage(ctx.chatId, report);
   },
 
   "/leaderboard": async (ctx: BotContext) => {

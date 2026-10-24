@@ -2,17 +2,28 @@ import { TelegramUpdate, CloudflareEnv } from "./types";
 import { handleMessage } from "./router";
 import { CONFIG } from "./config";
 
-export async function sendMessage(chatId: number, text: string): Promise<Response> {
+export async function sendMessage(
+  chatId: number,
+  text: string,
+  replyMarkup?: Record<string, any>
+): Promise<Response> {
+  const payload: Record<string, any> = {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+  };
+
+  if (replyMarkup) {
+    payload.reply_markup = replyMarkup;
+  }
+
   return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-    }),
+    body: JSON.stringify(payload),
   });
 }
+
 
 export default {
   async fetch(request: Request, env: CloudflareEnv): Promise<Response> {

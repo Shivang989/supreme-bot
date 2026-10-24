@@ -6,15 +6,17 @@ import { vaultHandlers } from "./modules/vault";
 import { combatHandlers } from "./modules/combat";
 import { entertainmentHandlers } from "./modules/entertainment";
 import { systemHandlers } from "./modules/system";
+import { helpHandlers } from "./modules/help";
 
-// Registry mapping command triggers to dedicated module functions
 const commandRegistry: Record<string, CommandHandler> = {
   ...systemHandlers,
+  ...helpHandlers,
   ...vaultHandlers,
   ...combatHandlers,
   ...adminHandlers,
   ...entertainmentHandlers,
 };
+
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
   const message = update.message;
