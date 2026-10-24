@@ -23,21 +23,21 @@ export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage
 }
 
 export const systemHandlers: Record<string, CommandHandler> = {
+
   // ==========================================
-  // 👑 /start - Classic Underworld Terminal
+  // 🚀 /start
   // ==========================================
   "/start": async (ctx: BotContext) => {
     const rawName = ctx.message.from.first_name || "Operative";
-    const safeName = rawName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const safeName = rawName
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
-    const title = toCustomFont("THE UNDERWORLD TERMINAL");
     const greeting = toCustomFont(`Welcome back, ${safeName}.`);
-    const line1 = toCustomFont("Connection established. All systems are green.");
-    const line2 = toCustomFont("Start! a DM and explore all features.");
+    const actionText = toCustomFont("Start! a DM and explore all features.");
 
-    const text =
-      `👑 <b>${title}</b>\n\n` +
-      `<blockquote>${greeting}\n${line1}\n${line2}</blockquote>`;
+    const text = `<blockquote>${greeting}\n${actionText}</blockquote>`;
 
     const inlineKeyboard = {
       inline_keyboard: [
@@ -56,6 +56,7 @@ export const systemHandlers: Record<string, CommandHandler> = {
 
     await sendMessage(ctx.chatId, text, inlineKeyboard);
   },
+
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
