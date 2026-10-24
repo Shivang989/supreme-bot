@@ -1,126 +1,136 @@
-import { MongoClient, Db, Collection } from "mongodb";
-import { ENV } from "./env";
+import { UserData, InventoryItem } from "./types";
+import { CONFIG } from "./config";
 
-export interface UserSessionData {
-    userId: string;
-    sessionString?: string;
-    firstName?: string;
-    username?: string;
-    status?: "ACTIVE" | "REVOKED" | string;
-    assistEnabled?: boolean;
-    customPersona?: string;
-    [key: string]: any;
+export interface AdminRecord {
+  chat_id: number;
+  user_id: number;
+  level: number;
+  title?: string;
 }
 
-export interface WatcherEntry {
-    _id?: any;
-    sessionUserId: string;
-    sourceChatId: string;
-    destinationChatId: string;
-    active: boolean;
-    [key: string]: any;
-}
+export const DB_MANAGER = {
+  // ==========================================
+  // 👤 USER OPERATIONS
+  // ==========================================
+  async ensureUserExists(db: D1Database, userId: number): Promise<void> {
+    const existing = await db
+      .prepare("SELECT user_id FROM users WHERE user_id = ?")
+      .bind(userId)
+      .first();
 
-export interface PendingCommand {
-    _id?: any;
-    eventKey: string;
-    chatId: string;
-    messageId: number;
-    senderId?: string;
-    text?: string;
-    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
-    createdAt: Date | number;
-    [key: string]: any;
-}
-
-export interface VaultItem {
-    _id?: any;
-    userId: string;
-    name: string;
-    text?: string;
-    media?: any;
-    createdAt: Date | number;
-    [key: string]: any;
-}
-
-export interface ScheduledTask {
-    _id?: any;
-    userId?: any;
-    chatId: string;
-    isChannel?: boolean;
-    message: string;
-    nextRun?: number;
-    interval?: number;
-    remaining?: number;
-    executeAt?: Date | number;
-    status: "PENDING" | "COMPLETED" | "CANCELLED" | string;
-    createdAt?: Date | number;
-    [key: string]: any;
-}
-
-export interface CloneBackup {
-    _id?: any;
-    userId: string;
-    firstName: string;
-    lastName: string;
-    about: string;
-    hasClonedPhoto: boolean;
-    createdAt: Date | number;
-    [key: string]: any;
-}
-
-export class DatabaseService {
-    public client!: MongoClient;
-    public db!: Db;
-    public sessions!: Collection<UserSessionData>;
-    public pendingCommands!: Collection<PendingCommand>;
-    public vault!: Collection<VaultItem>;
-    public tasks!: Collection<ScheduledTask>;
-    public contacts!: Collection<any>;
-    public watchers!: Collection<WatcherEntry>;
-    public botConfig!: Collection<any>;
-    public userStates!: Collection<any>;
-    public quickDm!: Collection<any>;
-    public cloneBackups!: Collection<CloneBackup>;
-
-    public async connect(): Promise<void> {
-        const uri = (ENV.MONGODB_URI || process.env.MONGODB_URI || process.env.MONGO_URI || "").trim();
-        if (!uri) {
-            throw new Error("MONGODB_URI environment variable is not defined.");
-        }
-
-        this.client = new MongoClient(uri);
-        await this.client.connect();
-        this.db = this.client.db();
-
-        // Initialize collections
-        this.sessions = this.db.collection<UserSessionData>("sessions");
-        this.pendingCommands = this.db.collection<PendingCommand>("pending_commands");
-        this.vault = this.db.collection<VaultItem>("vault");
-        this.tasks = this.db.collection<ScheduledTask>("tasks");
-        this.contacts = this.db.collection<any>("contacts");
-        this.watchers = this.db.collection<WatcherEntry>("watchers");
-        this.botConfig = this.db.collection<any>("bot_config");
-        this.userStates = this.db.collection<any>("user_states");
-        this.quickDm = this.db.collection<any>("quick_dm");
-        this.cloneBackups = this.db.collection<CloneBackup>("clone_backups");
-
-        // Enforce unique indexes
-        await this.sessions.createIndex({ userId: 1 }, { unique: true }).catch(() => {});
-        await this.pendingCommands.createIndex({ eventKey: 1 }, { unique: true }).catch(() => {});
-        await this.cloneBackups.createIndex({ userId: 1 }, { unique: true }).catch(() => {});
-
-        console.log("✅ [DB] Connected to MongoDB and collections initialized.");
+    if (!existing) {
+      await db
+        .prepare(
+          "INSERT INTO users (user_id, balance, ammo, kills, is_alive, protected_until, last_daily) VALUES (?, ?, 0, 0, 1, 0, 0)"
+        )
+        .bind(userId, CONFIG.STARTING_BALANCE)
+        .run();
     }
+  },
 
-    public async disconnect(): Promise<void> {
-        if (this.client) {
-            await this.client.close();
-        }
-    }
-}
+  async getUser(db: D1Database, userId: number): Promise<UserData | null> {
+    const user = await db
+      .prepare("SELECT * FROM users WHERE user_id = ?")
+      .bind(userId)
+      .first<UserData>();
 
-export const DB = new DatabaseService();
-export default DB;
+    return user || null;
+  },
+
+  async updateBalance(db: D1Database, userId: number, balance: number): Promise<void> {
+    await db
+      .prepare("UPDATE users SET balance = ? WHERE user_id = ?")
+      .bind(balance, userId)
+      .run();
+  },
+
+  async setAliveStatus(db: D1Database, userId: number, isAlive: number): Promise<void> {
+    await db
+      .prepare("UPDATE users SET is_alive = ? WHERE user_id = ?")
+      .bind(isAlive, userId)
+      .run();
+  },
+
+  async addKill(db: D1Database, userId: number): Promise<void> {
+    await db
+      .prepare("UPDATE users SET kills = COALESCE(kills, 0) + 1 WHERE user_id = ?")
+      .bind(userId)
+      .run();
+  },
+
+  async setProtection(db: D1Database, userId: number, expireTimestamp: number): Promise<void> {
+    await db
+      .prepare("UPDATE users SET protected_until = ? WHERE user_id = ?")
+      .bind(expireTimestamp, userId)
+      .run();
+  },
+
+  async getTopPlayers(db: D1Database, limit: number = 5): Promise<UserData[]> {
+    const result = await db
+      .prepare("SELECT * FROM users ORDER BY balance DESC LIMIT ?")
+      .bind(limit)
+      .all<UserData>();
+
+    return result.results || [];
+  },
+
+  // ==========================================
+  // 🎒 INVENTORY OPERATIONS
+  // ==========================================
+  async getInventory(db: D1Database, userId: number): Promise<InventoryItem[]> {
+    const result = await db
+      .prepare("SELECT * FROM inventory WHERE user_id = ? AND quantity > 0")
+      .bind(userId)
+      .all<InventoryItem>();
+
+    return result.results || [];
+  },
+
+  // ==========================================
+  // 🛡️ ADMIN OPERATIONS
+  // ==========================================
+  async getAdmin(db: D1Database, chatId: number, userId: number): Promise<AdminRecord | null> {
+    const admin = await db
+      .prepare("SELECT * FROM admins WHERE chat_id = ? AND user_id = ?")
+      .bind(chatId, userId)
+      .first<AdminRecord>();
+
+    return admin || null;
+  },
+
+  async setAdmin(
+    db: D1Database,
+    chatId: number,
+    userId: number,
+    level: number,
+    title?: string
+  ): Promise<void> {
+    await db
+      .prepare(
+        `INSERT INTO admins (chat_id, user_id, level, title)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(chat_id, user_id)
+         DO UPDATE SET level = excluded.level, title = excluded.title`
+      )
+      .bind(chatId, userId, level, title ?? "Admin")
+      .run();
+  },
+
+  async removeAdmin(db: D1Database, chatId: number, userId: number): Promise<void> {
+    await db
+      .prepare("DELETE FROM admins WHERE chat_id = ? AND user_id = ?")
+      .bind(chatId, userId)
+      .run();
+  },
+
+  async getAllAdmins(db: D1Database, chatId: number): Promise<AdminRecord[]> {
+    const result = await db
+      .prepare("SELECT * FROM admins WHERE chat_id = ?")
+      .bind(chatId)
+      .all<AdminRecord>();
+
+    return result.results || [];
+  },
+};
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
