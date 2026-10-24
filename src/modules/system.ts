@@ -4,23 +4,43 @@ import { toCustomFont } from "../ui";
 import { sendMessage } from "../index";
 
 export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage): Promise<void> {
-  if (!message.new_chat_members) return;
+  if (!message.new_chat_members || message.new_chat_members.length === 0) return;
 
   for (const member of message.new_chat_members) {
-    const safeName = member.first_name
+    // 1. Ensure new member is registered in D1 database
+    await DB_MANAGER.ensureUserExists(env.DB, member.id);
+
+    // 2. Safe name extraction with fallback
+    const rawName = member.first_name?.trim() || "there";
+    const safeName = rawName
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    const mention = `<a href="tg://user?id=${member.id}">${safeName}</a>`;
-    await DB_MANAGER.ensureUserExists(env.DB, member.id);
+    // 3. Format text using the custom typography engine
+    const greeting = toCustomFont(`Hello, ${safeName} 💕`);
+    const instructions = toCustomFont("Start a DM to use all the features.");
 
-    await sendMessage(
-      message.chat.id,
-      `Welcome, ${mention}. Type /help to explore.`
-    );
+    // 4. Construct blockquote container (produces the vertical accent line)
+    const text = `<blockquote>${greeting}\n\n${instructions}</blockquote>`;
+
+    // 5. Single inline action button directing to the bot's private chat
+    const inlineKeyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: toCustomFont("SOW"),
+            url: "https://t.me/Myaloobot?start=true",
+          },
+        ],
+      ],
+    };
+
+    // 6. Deliver the welcome message
+    await sendMessage(message.chat.id, text, inlineKeyboard);
   }
 }
+
 
 export const systemHandlers: Record<string, CommandHandler> = {
 
