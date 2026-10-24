@@ -1,156 +1,126 @@
-// ╭━━━━━━━━━━━━━━━✪
-// │ 🏥 THE CLINIC (DATABASE MANAGER)
-// ╰━━━━━━━━━━━━━━━✪
-// Yahan sirf D1 Database se baat karne ke functions honge.
-// Koi bhi dusri file direct DB ko nahi chhuegi, sab is clinic ke through aayenge.
+import { MongoClient, Db, Collection } from "mongodb";
+import { ENV } from "./env";
 
-import { UserData, InventoryItem } from './types';
+export interface UserSessionData {
+    userId: string;
+    sessionString?: string;
+    firstName?: string;
+    username?: string;
+    status?: "ACTIVE" | "REVOKED" | string;
+    assistEnabled?: boolean;
+    customPersona?: string;
+    [key: string]: any;
+}
 
-export const DB_MANAGER = {
-  
-   // ====================================================
-  // 1. Naya user create karna (Agar pehle se nahi hai)
-  async ensureUserExists(db: D1Database, userId: number): Promise<void> {
-    await db.prepare(
-      "INSERT OR IGNORE INTO users (user_id, balance, is_alive, kills) VALUES (?, 1000, 1, 0)"
-    ).bind(userId).run();
-  },
+export interface WatcherEntry {
+    _id?: any;
+    sessionUserId: string;
+    sourceChatId: string;
+    destinationChatId: string;
+    active: boolean;
+    [key: string]: any;
+}
 
-  // 1.5. Database Upgrades for Settings & Sessions
-  async initSettings(db: D1Database): Promise<void> {
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS group_settings (
-        chat_id INTEGER PRIMARY KEY,
-        welcome_enabled INTEGER DEFAULT 0,
-        welcome_text TEXT DEFAULT '',
-        welcome_media_id TEXT DEFAULT ''
-      )
-    `).run();
-    
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS setup_sessions (
-        user_id INTEGER PRIMARY KEY,
-        chat_id INTEGER,
-        step TEXT,
-        expires_at INTEGER
-      )
-    `).run();
-  },
+export interface PendingCommand {
+    _id?: any;
+    eventKey: string;
+    chatId: string;
+    messageId: number;
+    senderId?: string;
+    text?: string;
+    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+    createdAt: Date | number;
+    [key: string]: any;
+}
 
-  // Session State Machine Helpers
-  async setSession(db: D1Database, userId: number, chatId: number, step: string, expiresAt: number): Promise<void> {
-    await db.prepare("INSERT INTO setup_sessions (user_id, chat_id, step, expires_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET step=?, expires_at=?")
-      .bind(userId, chatId, step, expiresAt, step, expiresAt).run();
-  },
-  async getSession(db: D1Database, userId: number): Promise<any> {
-    const { results } = await db.prepare("SELECT * FROM setup_sessions WHERE user_id = ?").bind(userId).all();
-    return results.length > 0 ? results[0] : null;
-  },
-  async clearSession(db: D1Database, userId: number): Promise<void> {
-    await db.prepare("DELETE FROM setup_sessions WHERE user_id = ?").bind(userId).run();
-  },
+export interface VaultItem {
+    _id?: any;
+    userId: string;
+    name: string;
+    text?: string;
+    media?: any;
+    createdAt: Date | number;
+    [key: string]: any;
+}
 
-  // Group Settings Helpers
-  async getGroupSettings(db: D1Database, chatId: number): Promise<any> {
-    const { results } = await db.prepare("SELECT * FROM group_settings WHERE chat_id = ?").bind(chatId).all();
-    return results.length > 0 ? results[0] : null;
-  },
-  async updateGroupSetting(db: D1Database, chatId: number, column: string, value: any): Promise<void> {
-    // Upsert logic for settings
-    await db.prepare("INSERT OR IGNORE INTO group_settings (chat_id) VALUES (?)").bind(chatId).run();
-    await db.prepare(`UPDATE group_settings SET ${column} = ? WHERE chat_id = ?`).bind(value, chatId).run();
-  },
+export interface ScheduledTask {
+    _id?: any;
+    userId?: any;
+    chatId: string;
+    isChannel?: boolean;
+    message: string;
+    nextRun?: number;
+    interval?: number;
+    remaining?: number;
+    executeAt?: Date | number;
+    status: "PENDING" | "COMPLETED" | "CANCELLED" | string;
+    createdAt?: Date | number;
+    [key: string]: any;
+}
 
-   // ====================================================
-  // 2. User ka pura data nikalna
-  async getUser(db: D1Database, userId: number): Promise<UserData | null> {
-    const { results } = await db.prepare("SELECT * FROM users WHERE user_id = ?").bind(userId).all();
-    if (results && results.length > 0) {
-      return results[0] as unknown as UserData;
+export interface CloneBackup {
+    _id?: any;
+    userId: string;
+    firstName: string;
+    lastName: string;
+    about: string;
+    hasClonedPhoto: boolean;
+    createdAt: Date | number;
+    [key: string]: any;
+}
+
+export class DatabaseService {
+    public client!: MongoClient;
+    public db!: Db;
+    public sessions!: Collection<UserSessionData>;
+    public pendingCommands!: Collection<PendingCommand>;
+    public vault!: Collection<VaultItem>;
+    public tasks!: Collection<ScheduledTask>;
+    public contacts!: Collection<any>;
+    public watchers!: Collection<WatcherEntry>;
+    public botConfig!: Collection<any>;
+    public userStates!: Collection<any>;
+    public quickDm!: Collection<any>;
+    public cloneBackups!: Collection<CloneBackup>;
+
+    public async connect(): Promise<void> {
+        const uri = (ENV.MONGODB_URI || process.env.MONGODB_URI || process.env.MONGO_URI || "").trim();
+        if (!uri) {
+            throw new Error("MONGODB_URI environment variable is not defined.");
+        }
+
+        this.client = new MongoClient(uri);
+        await this.client.connect();
+        this.db = this.client.db();
+
+        // Initialize collections
+        this.sessions = this.db.collection<UserSessionData>("sessions");
+        this.pendingCommands = this.db.collection<PendingCommand>("pending_commands");
+        this.vault = this.db.collection<VaultItem>("vault");
+        this.tasks = this.db.collection<ScheduledTask>("tasks");
+        this.contacts = this.db.collection<any>("contacts");
+        this.watchers = this.db.collection<WatcherEntry>("watchers");
+        this.botConfig = this.db.collection<any>("bot_config");
+        this.userStates = this.db.collection<any>("user_states");
+        this.quickDm = this.db.collection<any>("quick_dm");
+        this.cloneBackups = this.db.collection<CloneBackup>("clone_backups");
+
+        // Enforce unique indexes
+        await this.sessions.createIndex({ userId: 1 }, { unique: true }).catch(() => {});
+        await this.pendingCommands.createIndex({ eventKey: 1 }, { unique: true }).catch(() => {});
+        await this.cloneBackups.createIndex({ userId: 1 }, { unique: true }).catch(() => {});
+
+        console.log("✅ [DB] Connected to MongoDB and collections initialized.");
     }
-    return null;
-  },
 
-   // ====================================================
-  // 3. User ka balance update karna
-  async updateBalance(db: D1Database, userId: number, newBalance: number): Promise<void> {
-    await db.prepare("UPDATE users SET balance = ? WHERE user_id = ?").bind(newBalance, userId).run();
-  },
+    public async disconnect(): Promise<void> {
+        if (this.client) {
+            await this.client.close();
+        }
+    }
+}
 
-   // ====================================================
-  // 4. User ka status (Alive/Dead) update karna
-  async setAliveStatus(db: D1Database, userId: number, status: number): Promise<void> {
-    await db.prepare("UPDATE users SET is_alive = ? WHERE user_id = ?").bind(status, userId).run();
-  },
-
-   // ====================================================
-  // 5. Kills ka counter badhana
-  async addKill(db: D1Database, userId: number): Promise<void> {
-    await db.prepare("UPDATE users SET kills = kills + 1 WHERE user_id = ?").bind(userId).run();
-  },
-
-   // ====================================================
-  // 6. Inventory me naya item add karna ya quantity badhana
-  async addInventoryItem(db: D1Database, userId: number, itemName: string, quantity: number = 1): Promise<void> {
-    await db.prepare(`
-      INSERT INTO inventory (user_id, item_name, quantity) VALUES (?, ?, ?)
-      ON CONFLICT(user_id, item_name) DO UPDATE SET quantity = quantity + ?
-    `).bind(userId, itemName, quantity, quantity).run();
-  },
-
-   // ====================================================
-  // 7. Pura inventory bag check karna
-  async getInventory(db: D1Database, userId: number): Promise<InventoryItem[]> {
-    const { results } = await db.prepare("SELECT item_name, quantity FROM inventory WHERE user_id = ? AND quantity > 0").bind(userId).all();
-    return (results || []) as unknown as InventoryItem[];
-  },
-
-   // ====================================================
-  // 8. Top players nikalna (Leaderboard ke liye)
-  async getTopPlayers(db: D1Database, limit: number = 10): Promise<UserData[]> {
-    // Note: D1 engine me kabhi-kabhi 'LIMIT ?' bind karne me error aati hai.
-    // Isliye humne limit ko directly SQL string me inject kar diya hai (Safe because it's a hardcoded number).
-    const { results } = await db.prepare(`SELECT * FROM users ORDER BY balance DESC LIMIT ${limit}`).all();
-    return (results || []) as unknown as UserData[];
-  },
-
-   // ====================================================
-  // 9. Shield/Protection Timer Update karna
-  async setProtection(db: D1Database, userId: number, timestamp: number): Promise<void> {
-    await db.prepare("UPDATE users SET protection_until = ? WHERE user_id = ?").bind(timestamp, userId).run();
-  },
-
-   // ====================================================
-  // 10. Admin Level & Title Set karna
-  async setAdmin(db: D1Database, chatId: number, userId: number, level: number, title: string): Promise<void> {
-    await db.prepare(`
-      INSERT INTO group_admins (chat_id, user_id, level, title) VALUES (?, ?, ?, ?)
-      ON CONFLICT(chat_id, user_id) DO UPDATE SET level = ?, title = ?
-    `).bind(chatId, userId, level, title, level, title).run();
-  },
-
-   // ====================================================
-  // 11. Admin Check karna
-  async getAdmin(db: D1Database, chatId: number, userId: number): Promise<{level: number, title: string} | null> {
-    const { results } = await db.prepare("SELECT level, title FROM group_admins WHERE chat_id = ? AND user_id = ?").bind(chatId, userId).all();
-    return (results && results.length > 0) ? results[0] as any : null;
-  },
-
-   // ====================================================
-  // 12. Admin Remove karna
-  async removeAdmin(db: D1Database, chatId: number, userId: number): Promise<void> {
-    await db.prepare("DELETE FROM group_admins WHERE chat_id = ? AND user_id = ?").bind(chatId, userId).run();
-  },
-
-   // ====================================================
-  // 13. Group ke saare admins ki list
-  async getAllAdmins(db: D1Database, chatId: number): Promise<any[]> {
-    const { results } = await db.prepare("SELECT user_id, level, title FROM group_admins WHERE chat_id = ? ORDER BY level DESC").bind(chatId).all();
-    return results || [];
-  }
-
-   // ====================================================
-   
-};
+export const DB = new DatabaseService();
+export default DB;
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
