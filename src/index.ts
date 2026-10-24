@@ -5,7 +5,8 @@ import { CONFIG } from "./config";
 export async function sendMessage(
   chatId: number,
   text: string,
-  replyMarkup?: Record<string, any>
+  replyMarkup?: Record<string, any>,
+  replyToMessageId?: number
 ): Promise<Response> {
   const payload: Record<string, any> = {
     chat_id: chatId,
@@ -15,6 +16,10 @@ export async function sendMessage(
 
   if (replyMarkup) {
     payload.reply_markup = replyMarkup;
+  }
+
+  if (replyToMessageId) {
+    payload.reply_parameters = { message_id: replyToMessageId };
   }
 
   return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {

@@ -28,8 +28,9 @@ export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage
 }
 
 export const systemHandlers: Record<string, CommandHandler> = {
+
   // ==========================================
-  // 🚀 /start - Private DM Introduction
+  // 🚀 /start - Replied DM Introduction
   // ==========================================
   "/start": async (ctx: BotContext) => {
     const rawName = ctx.message.from.first_name?.trim() || "Operative";
@@ -43,7 +44,7 @@ export const systemHandlers: Record<string, CommandHandler> = {
     // Exact two-line layout with Unicode styling inside Telegram's quote container
     const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
 
-    // Two side-by-side inline buttons (each occupying half width)
+    // Two side-by-side inline buttons
     const inlineKeyboard = {
       inline_keyboard: [
         [
@@ -59,8 +60,10 @@ export const systemHandlers: Record<string, CommandHandler> = {
       ],
     };
 
-    await sendMessage(ctx.chatId, text, inlineKeyboard);
+    // Passed ctx.message.message_id to reply directly to the command
+    await sendMessage(ctx.chatId, text, inlineKeyboard, ctx.message.message_id);
   },
+
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
