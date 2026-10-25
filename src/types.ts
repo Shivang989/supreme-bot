@@ -32,6 +32,7 @@ export interface TelegramUpdate {
   update_id: number;
   message?: TelegramMessage;
   callback_query?: any;
+  chat_member?: any;
 }
 
 export interface BotContext {

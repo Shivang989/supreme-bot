@@ -29,6 +29,21 @@ export async function sendMessage(
   });
 }
 
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string,
+  showAlert: boolean = false
+): Promise<Response> {
+  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: showAlert,
+    }),
+  });
+}
 
 export default {
   async fetch(request: Request, env: CloudflareEnv): Promise<Response> {

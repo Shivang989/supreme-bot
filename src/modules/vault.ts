@@ -30,6 +30,13 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   // ==========================================
   // 🔫 /b or /bullets - Check Ammo & Purchase
   // ==========================================
+  "/bal": async (ctx: BotContext) => {
+    await vaultHandlers["/b"](ctx);
+  },
+  "/balance": async (ctx: BotContext) => {
+    await vaultHandlers["/b"](ctx);
+  },
+
   "/b": async (ctx: BotContext) => {
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
     if (!user) return;

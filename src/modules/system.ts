@@ -1,15 +1,23 @@
-import { BotContext, CommandHandler, CloudflareEnv, TelegramMessage } from "../types";
+import { BotContext, CommandHandler, CloudflareEnv, TelegramMessage, TelegramUser } from "../types";
 import { DB_MANAGER } from "../db";
+import { CONFIG } from "../config";
 import { toCustomFont } from "../ui";
 import { sendMessage } from "../index";
 
 // ==========================================
-// 👋 GROUP WELCOME HANDLER (Unmodified)
+// 👋 GROUP WELCOME HANDLER
 // ==========================================
-export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage): Promise<void> {
-  if (!message.new_chat_members || message.new_chat_members.length === 0) return;
+export async function handleWelcome(
+  env: CloudflareEnv,
+  message: TelegramMessage,
+  members?: TelegramUser[]
+): Promise<void> {
+  const memberList = members || message.new_chat_members || [];
+  if (memberList.length === 0) return;
 
-  for (const member of message.new_chat_members) {
+  for (const member of memberList) {
+    if (member.is_bot) continue;
+
     await DB_MANAGER.ensureUserExists(env.DB, member.id);
 
     const rawName = member.first_name?.trim() || "Member";
@@ -28,42 +36,78 @@ export async function handleWelcome(env: CloudflareEnv, message: TelegramMessage
 }
 
 export const systemHandlers: Record<string, CommandHandler> = {
-
   // ==========================================
-  // 🚀 /start - Replied DM Introduction
+  // 🚀 /start - Group vs Private DM Handling
   // ==========================================
   "/start": async (ctx: BotContext) => {
-    const rawName = ctx.message.from.first_name?.trim() || "Operative";
+    const isPrivate = ctx.message.chat.type === "private";
+    const rawName = ctx.message.from.first_name?.trim() || "Player";
     const safeName = rawName
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    const styledName = toCustomFont(safeName);
+    // --- GROUP CONTEXT: Reply UI ---
+    if (!isPrivate) {
+      const styledName = toCustomFont(safeName);
+      const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
 
-    // Exact two-line layout with Unicode styling inside Telegram's quote container
-    const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
+      const inlineKeyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: "➕ Add",
+              url: "https://t.me/Myaloobot?startgroup=true",
+            },
+            {
+              text: "💬 Start DM",
+              url: "https://t.me/Myaloobot?start=true",
+            },
+          ],
+        ],
+      };
 
-    // Two side-by-side inline buttons
-    const inlineKeyboard = {
+      await sendMessage(ctx.chatId, text, inlineKeyboard, ctx.message.message_id);
+      return;
+    }
+
+    // --- PRIVATE DM CONTEXT: Gaming Partner UI ---
+    await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+
+    const balance = user?.balance ?? CONFIG.STARTING_BALANCE ?? 0;
+    const kills = user?.kills ?? 0;
+
+    const dmText =
+      `Hey, 💕 <b>${safeName}</b>! 👋\n` +
+      `I'm Aloo — your gaming partner for managing your balance, earning money, and competing with other players.\n\n` +
+      `👤 <b>Your Profile</b>\n\n` +
+      `Name: ${safeName}\n` +
+      `Balance: ${balance} 💰\n` +
+      `Kills: ${kills} ☠️\n\n` +
+      `Quick Commands\n\n` +
+      `💰 "/bal" — Check your balance\n` +
+      `🔫 "/fire" — Fire a bullet\n` +
+      `💵 "/rob" — Attempt to steal money\n` +
+      `🛡️ "/safe" — Keep your money safe`;
+
+    const dmKeyboard = {
       inline_keyboard: [
         [
-          {
-            text: "➕ Add",
-            url: "https://t.me/Myaloobot?startgroup=true",
-          },
-          {
-            text: "💬 Start DM",
-            url: "https://t.me/Myaloobot?start=true",
-          },
+          { text: "📖 Help", callback_data: "help" },
+        ],
+        [
+          { text: "📢 Updates", callback_data: "updates" },
+          { text: "💬 Feedback", callback_data: "feedback" },
+        ],
+        [
+          { text: "➕ Add Me to Your Group", url: "https://t.me/Myaloobot?startgroup=true" },
         ],
       ],
     };
 
-    // Passed ctx.message.message_id to reply directly to the command
-    await sendMessage(ctx.chatId, text, inlineKeyboard, ctx.message.message_id);
+    await sendMessage(ctx.chatId, dmText, dmKeyboard);
   },
-
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
@@ -90,4 +134,3 @@ export const systemHandlers: Record<string, CommandHandler> = {
     await systemHandlers["/top"](ctx);
   },
 };
-

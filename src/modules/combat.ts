@@ -158,6 +158,10 @@ export const combatHandlers: Record<string, CommandHandler> = {
   // ==========================================
   // 🛡️ /defend or /shield - Deploy Protection
   // ==========================================
+  "/safe": async (ctx: BotContext) => {
+    await combatHandlers["/defend"](ctx);
+  },
+
   "/defend": async (ctx: BotContext) => {
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
     if (!user) return;
