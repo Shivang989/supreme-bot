@@ -9,8 +9,8 @@ import {
 import { DB_MANAGER } from "../db";
 import { CONFIG } from "../config";
 import { toCustomFont } from "../ui";
-import { sendMessage } from "../index";
-import { getDefaultDMUIConfig, compileMenuKeyboard } from "./dmui";
+import { sendMessage, sendPhoto, sendVideo } from "../index";
+import { renderCustomTemplate, getDefaultDMUIConfig, compileMenuKeyboard } from "./dmui";
 
 // ==========================================
 // 👋 GROUP WELCOME HANDLER
@@ -84,35 +84,56 @@ export const systemHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    // --- PRIVATE DM CONTEXT: Gaming Partner UI ---
+    // --- PRIVATE DM CONTEXT ---
     await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+
+    const liveConfig =
+      (await DB_MANAGER.getSetting<DMUIConfig>(ctx.env.DB, "dmui_live_config")) ||
+      getDefaultDMUIConfig();
 
     const balance = user?.balance ?? CONFIG.STARTING_BALANCE ?? 0;
     const kills = user?.kills ?? 0;
 
-    const dmText =
-      `Hey, 💕 <b>${safeName}</b>! 👋\n` +
-      `I'm Aloo — your gaming partner for managing your balance, earning money, and competing with other players.\n\n` +
-      `👤 <b>Your Profile</b>\n\n` +
-      `Name: ${safeName}\n` +
-      `Balance: ${balance} 💰\n` +
-      `Kills: ${kills} ☠️\n\n` +
-      `Quick Commands\n\n` +
-      `💰 "/bal" — Check your balance\n` +
-      `🔫 "/fire" — Fire a bullet\n` +
-      `💵 "/rob" — Attempt to steal money\n` +
-      `🛡️ "/safe" — Keep your money safe`;
-
-    const liveConfig =
-      (await DB_MANAGER.getSetting<DMUIConfig>(
-        ctx.env.DB,
-        "dmui_live_config"
-      )) || getDefaultDMUIConfig();
+    // Resolve text template: custom configured text or default template
+    let dmText: string;
+    if (liveConfig.customText) {
+      dmText = renderCustomTemplate(liveConfig.customText, {
+        id: ctx.userId,
+        first_name: rawName,
+        balance,
+        kills,
+      });
+    } else {
+      dmText =
+        `Hey, 💕 <b>${safeName}</b>! 👋\n` +
+        `I'm Aloo — your gaming partner for managing your balance, earning money, and competing with other players.\n\n` +
+        `👤 <b>Your Profile</b>\n\n` +
+        `Name: ${safeName}\n` +
+        `Balance: ${balance} 💰\n` +
+        `Kills: ${kills} ☠️\n\n` +
+        `Quick Commands\n\n` +
+        `💰 "/bal" — Check your balance\n` +
+        `🔫 "/fire" — Fire a bullet\n` +
+        `💵 "/rob" — Attempt to steal money\n` +
+        `🛡️ "/safe" — Keep your money safe`;
+    }
 
     const dmKeyboard = compileMenuKeyboard(liveConfig, "root", false);
 
+    // Send with Media if configured
+    if (liveConfig.mediaType === "photo" && liveConfig.mediaFileId) {
+      await sendPhoto(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
+      return;
+    }
+
+    if (liveConfig.mediaType === "video" && liveConfig.mediaFileId) {
+      await sendVideo(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
+      return;
+    }
+
     await sendMessage(ctx.chatId, dmText, dmKeyboard);
+
   },
 
   "/ping": async (ctx: BotContext) => {

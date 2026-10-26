@@ -6,7 +6,12 @@ import { vaultHandlers } from "./modules/vault";
 import { combatHandlers } from "./modules/combat";
 import { entertainmentHandlers } from "./modules/entertainment";
 import { helpHandlers } from "./modules/help";
-import { dmuiHandlers, handleDMUICallback, handleDMUITextInput } from "./modules/dmui";
+import {
+  dmuiHandlers,
+  handleDMUICallback,
+  handleDMUITextInput,
+  handleDMUIMediaInput,
+} from "./modules/dmui";
 import { answerCallbackQuery } from "./index";
 
 const commandRegistry: Record<string, CommandHandler> = {
@@ -90,7 +95,23 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   const rawText = message.text?.trim();
   if (!rawText) return;
 
-  // 4. Intercept Owner Text Input during active /dmui Wizard Steps
+  // 4. Intercept Owner Photo/Video during active Media Wizard
+  if (message.photo || message.video) {
+    const ctx: BotContext = {
+      env,
+      update,
+      message,
+      chatId,
+      userId,
+      text: message.caption || "",
+      command: "",
+      args: [],
+    };
+    const handledMedia = await handleDMUIMediaInput(ctx);
+    if (handledMedia) return;
+  }
+
+  // 5. Intercept Owner Text Input during active /dmui Wizard Steps
   if (!rawText.startsWith("/")) {
     const ctx: BotContext = {
       env,
@@ -106,7 +127,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     return;
   }
 
-  // 5. Standard Command Routing (also allows command input during Step 4 Command Wizard)
+  // 6. Standard Command Routing (also allows command input during Step 4 Command Wizard)
   const parts = rawText.split(/\s+/);
   const command = parts[0].toLowerCase().split("@")[0];
   const args = parts.slice(1);
