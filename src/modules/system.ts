@@ -10,11 +10,13 @@ import { DB_MANAGER } from "../db";
 import { CONFIG } from "../config";
 import { toCustomFont } from "../ui";
 import { sendMessage, sendPhoto, sendVideo } from "../index";
-import { renderCustomTemplate, getDefaultDMUIConfig, compileMenuKeyboard } from "./dmui";
+import {
+  renderCustomTemplate,
+  getDefaultButtons,
+  compileInlineKeyboard,
+} from "./dmui";
 
-// ==========================================
-// 👋 GROUP WELCOME HANDLER
-// ==========================================
+// Group Welcome (Unmodified)
 export async function handleWelcome(
   env: CloudflareEnv,
   message: TelegramMessage,
@@ -44,9 +46,7 @@ export async function handleWelcome(
 }
 
 export const systemHandlers: Record<string, CommandHandler> = {
-  // ==========================================
-  // 🚀 /start - Group vs Private DM Handling
-  // ==========================================
+  // /start handler
   "/start": async (ctx: BotContext) => {
     const isPrivate = ctx.message.chat.type === "private";
     const rawName = ctx.message.from.first_name?.trim() || "Player";
@@ -55,47 +55,32 @@ export const systemHandlers: Record<string, CommandHandler> = {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // --- GROUP CONTEXT: Replied DM Introduction ---
+    // GROUP /start — Unchanged direct reply
     if (!isPrivate) {
       const styledName = toCustomFont(safeName);
       const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
-
-      const inlineKeyboard = {
+      const groupKb = {
         inline_keyboard: [
           [
-            {
-              text: "➕ Add",
-              url: "https://t.me/Myaloobot?startgroup=true",
-            },
-            {
-              text: "💬 Start DM",
-              url: "https://t.me/Myaloobot?start=true",
-            },
+            { text: "➕ Add", url: "https://t.me/Myaloobot?startgroup=true" },
+            { text: "💬 Start DM", url: "https://t.me/Myaloobot?start=true" },
           ],
         ],
       };
-
-      await sendMessage(
-        ctx.chatId,
-        text,
-        inlineKeyboard,
-        ctx.message.message_id
-      );
+      await sendMessage(ctx.chatId, text, groupKb, ctx.message.message_id);
       return;
     }
 
-    // --- PRIVATE DM CONTEXT ---
+    // PRIVATE DM /start — Reads /dmui settings
     await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-
-    const liveConfig =
-      (await DB_MANAGER.getSetting<DMUIConfig>(ctx.env.DB, "dmui_live_config")) ||
-      getDefaultDMUIConfig();
-
     const balance = user?.balance ?? CONFIG.STARTING_BALANCE ?? 0;
     const kills = user?.kills ?? 0;
 
-    // Resolve text template: custom configured text or default template
+    const liveConfig =
+      (await DB_MANAGER.getSetting<DMUIConfig>(ctx.env.DB, "dmui_live_config")) || {};
+
+    // 1. Resolve Text
     let dmText: string;
     if (liveConfig.customText) {
       dmText = renderCustomTemplate(liveConfig.customText, {
@@ -119,47 +104,48 @@ export const systemHandlers: Record<string, CommandHandler> = {
         `🛡️ "/safe" — Keep your money safe`;
     }
 
-    const dmKeyboard = compileMenuKeyboard(liveConfig, "root", false);
+    // 2. Resolve Buttons
+    const buttonRows = liveConfig.buttonRows || getDefaultButtons();
+    const dmKeyboard = compileInlineKeyboard(buttonRows);
 
-    // Send with Media if configured
+    // 3. Resolve Media with Fallback
     if (liveConfig.mediaType === "photo" && liveConfig.mediaFileId) {
-      await sendPhoto(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
-      return;
+      try {
+        const res = await sendPhoto(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
+        if (res.ok) return;
+      } catch (e) {
+        console.error("sendPhoto failed:", e);
+      }
     }
 
     if (liveConfig.mediaType === "video" && liveConfig.mediaFileId) {
-      await sendVideo(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
-      return;
+      try {
+        const res = await sendVideo(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
+        if (res.ok) return;
+      } catch (e) {
+        console.error("sendVideo failed:", e);
+      }
     }
 
+    // Fallback: standard HTML message
     await sendMessage(ctx.chatId, dmText, dmKeyboard);
-
   },
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
-    await sendMessage(
-      ctx.chatId,
-      `🏓 <b>Pong!</b> <code>${Date.now() - start}ms</code>`
-    );
+    await sendMessage(ctx.chatId, `🏓 <b>Pong!</b> <code>${Date.now() - start}ms</code>`);
   },
 
   "/top": async (ctx: BotContext) => {
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
-
     if (!topPlayers || topPlayers.length === 0) {
-      await sendMessage(
-        ctx.chatId,
-        "🏆 <b>No active operatives registered.</b>"
-      );
+      await sendMessage(ctx.chatId, "🏆 <b>No active operatives registered.</b>");
       return;
     }
-
     let report = "🏆 <b>SYNDICATE LEADERBOARD</b>\n\n";
     topPlayers.forEach((p, idx) => {
       report += `${idx + 1}. <b>UID:</b> <code>${p.user_id}</code> • <b>Cash:</b> ₹${p.balance}\n`;
     });
-
     await sendMessage(ctx.chatId, report);
   },
 

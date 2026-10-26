@@ -25,12 +25,12 @@ const commandRegistry: Record<string, CommandHandler> = {
 };
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
-  // 1. Handle Inline Button Callbacks
+  // 1. Inline Button Callbacks
   if (update.callback_query) {
     const cq = update.callback_query;
     const data: string = cq.data || "";
 
-    // Execute permitted bot command triggered by a custom DM /start button
+    // Command runner button
     if (data.startsWith("dm_cmd:")) {
       const cmd = data.replace("dm_cmd:", "");
       const handler = commandRegistry[cmd];
@@ -51,12 +51,12 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
       return;
     }
 
-    // Route DMUI Builder & Submenu Navigation Callbacks
-    const handledByDMUI = await handleDMUICallback(env, cq);
-    if (handledByDMUI) return;
+    // DMUI Builder Callbacks
+    const handled = await handleDMUICallback(env, cq);
+    if (handled) return;
   }
 
-  // 2. Handle Supergroup Member Additions
+  // 2. Chat Member Additions
   if (update.chat_member) {
     const cm = update.chat_member;
     const oldStatus = cm.old_chat_member?.status;
@@ -83,7 +83,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
 
   await DB_MANAGER.ensureUserExists(env.DB, userId);
 
-  // 3. Handle Group Welcome Joins
+  // 3. Group Joins
   const newMembers =
     message.new_chat_members ||
     ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
@@ -92,10 +92,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     return;
   }
 
-  const rawText = message.text?.trim();
-  if (!rawText) return;
-
-  // 4. Intercept Owner Photo/Video during active Media Wizard
+  // 4. Capture Photo / Video for /dmui Media Setup
   if (message.photo || message.video) {
     const ctx: BotContext = {
       env,
@@ -111,27 +108,10 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     if (handledMedia) return;
   }
 
-  // 5. Intercept Owner Text Input during active /dmui Wizard Steps
-  if (!rawText.startsWith("/")) {
-    const ctx: BotContext = {
-      env,
-      update,
-      message,
-      chatId,
-      userId,
-      text: rawText,
-      command: "",
-      args: [],
-    };
-    await handleDMUITextInput(ctx);
-    return;
-  }
+  const rawText = message.text?.trim();
+  if (!rawText) return;
 
-  // 6. Standard Command Routing (also allows command input during Step 4 Command Wizard)
-  const parts = rawText.split(/\s+/);
-  const command = parts[0].toLowerCase().split("@")[0];
-  const args = parts.slice(1);
-
+  // 5. Intercept Owner Text for /dmui
   const ctx: BotContext = {
     env,
     update,
@@ -139,14 +119,26 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     chatId,
     userId,
     text: rawText,
-    command,
-    args,
+    command: "",
+    args: [],
     reply: message.reply_to_message,
   };
 
-  if (command !== "/dmui" && (await handleDMUITextInput(ctx))) {
-    return;
+  if (!rawText.startsWith("/")) {
+    const handledInput = await handleDMUITextInput(ctx);
+    if (handledInput) return;
+  } else if (rawText === "/empty" || rawText === "/default") {
+    const handledInput = await handleDMUITextInput(ctx);
+    if (handledInput) return;
   }
+
+  // 6. Standard Command Execution
+  const parts = rawText.split(/\s+/);
+  const command = parts[0].toLowerCase().split("@")[0];
+  const args = parts.slice(1);
+
+  ctx.command = command;
+  ctx.args = args;
 
   const handler = commandRegistry[command];
   if (handler) {

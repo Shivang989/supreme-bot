@@ -44,15 +44,20 @@ export interface TelegramMessage {
   new_chat_members?: TelegramUser[];
 }
 
+export interface SimpleButton {
+  text: string;
+  type: "url" | "cmd" | "alert";
+  value: string;
+}
+
 export interface DMUIConfig {
   customText?: string;
   mediaType?: "photo" | "video" | "none";
   mediaFileId?: string;
-  menus: Record<string, DMMenu>;
-  buttons: DMButton[];
+  buttonRows?: SimpleButton[][];
+  rawButtonsText?: string;
+  alerts?: Record<string, string>;
 }
-
-
 
 export interface DMButton {
   id: string;
