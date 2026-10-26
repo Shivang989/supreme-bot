@@ -15,6 +15,45 @@ export type ButtonActionType =
   | "back"
   | "custom";
 
+export interface TelegramPhotoSize {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  file_size?: number;
+}
+
+export interface TelegramVideo {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  duration: number;
+  file_size?: number;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  from: TelegramUser;
+  chat: { id: number; type: string; title?: string };
+  text?: string;
+  caption?: string;
+  photo?: TelegramPhotoSize[];
+  video?: TelegramVideo;
+  reply_to_message?: TelegramMessage;
+  new_chat_members?: TelegramUser[];
+}
+
+export interface DMUIConfig {
+  customText?: string;
+  mediaType?: "photo" | "video" | "none";
+  mediaFileId?: string;
+  menus: Record<string, DMMenu>;
+  buttons: DMButton[];
+}
+
+
+
 export interface DMButton {
   id: string;
   text: string;
@@ -30,14 +69,6 @@ export interface DMMenu {
   id: string;
   name: string;
   parentId?: string;
-}
-
-export interface DMUIConfig {
-  text?: string;
-  mediaType?: "photo" | "video" | "none";
-  mediaFileId?: string;
-  menus: Record<string, DMMenu>;
-  buttons: DMButton[];
 }
 
 export interface DMUISession {
@@ -63,15 +94,6 @@ export interface TelegramUser {
   last_name?: string;
   username?: string;
   is_bot?: boolean;
-}
-
-export interface TelegramMessage {
-  message_id: number;
-  from: TelegramUser;
-  chat: { id: number; type: string; title?: string };
-  text?: string;
-  reply_to_message?: TelegramMessage;
-  new_chat_members?: TelegramUser[];
 }
 
 export interface TelegramUpdate {

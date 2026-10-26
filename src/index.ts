@@ -39,6 +39,47 @@ export async function editMessageReplyMarkup(
   });
 }
 
+export async function sendPhoto(
+  chatId: number,
+  photoFileId: string,
+  caption?: string,
+  replyMarkup?: Record<string, any>
+): Promise<Response> {
+  const payload: Record<string, any> = {
+    chat_id: chatId,
+    photo: photoFileId,
+    parse_mode: "HTML",
+  };
+  if (caption) payload.caption = caption;
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+
+  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendVideo(
+  chatId: number,
+  videoFileId: string,
+  caption?: string,
+  replyMarkup?: Record<string, any>
+): Promise<Response> {
+  const payload: Record<string, any> = {
+    chat_id: chatId,
+    video: videoFileId,
+    parse_mode: "HTML",
+  };
+  if (caption) payload.caption = caption;
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+
+  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendVideo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
 
 export async function sendMessage(
   chatId: number,

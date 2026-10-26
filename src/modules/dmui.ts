@@ -82,6 +82,34 @@ export function getDefaultDMUIConfig(): DMUIConfig {
   };
 }
 
+
+export function renderCustomTemplate(
+  template: string,
+  user: { id: number; first_name: string; balance?: number; kills?: number }
+): string {
+  const safeName = (user.first_name || "Player")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const mention = `<a href="tg://user?id=${user.id}">${safeName}</a>`;
+
+  return template
+    .replace(/\{first_name\}/g, safeName)
+    .replace(/\{mention\}/g, mention)
+    .replace(/\{balance\}/g, String(user.balance ?? 0))
+    .replace(/\{kills\}/g, String(user.kills ?? 0))
+    .replace(/\{b\}/g, "<b>")
+    .replace(/\{\/b\}/g, "</b>")
+    .replace(/\{c\}/g, "<code>")
+    .replace(/\{\/c\}/g, "</code>")
+    .replace(/\{i\}/g, "<i>")
+    .replace(/\{\/i\}/g, "</i>")
+    .replace(/\{q\}/g, "<blockquote>")
+    .replace(/\{\/q\}/g, "</blockquote>");
+}
+
+
 // ==========================================
 // 📐 KEYBOARD COMPILER (Data -> Telegram API)
 // ==========================================
@@ -243,6 +271,49 @@ export async function renderButtonBuilderHome(
   }
 }
 
+
+export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
+  if (!isOwner(ctx.userId)) return false;
+
+  const session = await DB_MANAGER.getSetting<DMUISession>(ctx.env.DB, SESSION_KEY);
+  if (!session || session.step !== "AWAIT_CUSTOM_MEDIA") return false;
+
+  let fileId: string | null = null;
+  let type: "photo" | "video" = "photo";
+
+  if (ctx.message.photo && ctx.message.photo.length > 0) {
+    const highestRes = ctx.message.photo[ctx.message.photo.length - 1];
+    fileId = highestRes.file_id;
+    type = "photo";
+  } else if (ctx.message.video) {
+    fileId = ctx.message.video.file_id;
+    type = "video";
+  }
+
+  if (!fileId) return false;
+
+  session.draft.mediaType = type;
+  session.draft.mediaFileId = fileId;
+  session.step = "IDLE";
+  await DB_MANAGER.setSetting(ctx.env.DB, SESSION_KEY, session);
+
+  await sendMessage(
+    ctx.chatId,
+    `✅ <b>${type === "photo" ? "Photo" : "Video"} Captured!</b>\n\n` +
+    `File ID stored in working draft. Choose an option:`,
+    {
+      inline_keyboard: [
+        [{ text: "💾 Save Draft", callback_data: "dmui:save_draft" }],
+        [{ text: "✅ Apply Live", callback_data: "dmui:apply_live" }],
+        [{ text: "🔙 Main Menu", callback_data: "dmui:root" }],
+      ],
+    }
+  );
+
+  return true;
+}
+
+
 // ==========================================
 // 👑 /dmui COMMAND ENTRYPOINT
 // ==========================================
@@ -346,19 +417,72 @@ export async function handleDMUICallback(
     return true;
   }
 
-  if (action === "mod_text" || action === "mod_media") {
-    await answerCallbackQuery(cq.id, "This module is managed separately.", true);
+  // --- TEXT MODULE ---
+  if (action === "mod_text") {
+    session.step = "AWAIT_CUSTOM_TEXT";
+    await DB_MANAGER.setSetting(env.DB, SESSION_KEY, session);
+    await answerCallbackQuery(cq.id);
+
+    const helpMsg =
+      `📝 <b>CONFIGURE "/start" DM TEXT</b>\n\n` +
+      `Send the exact text you want players to see when starting the bot in DM.\n\n` +
+      `<b>Formatting Tags Available:</b>\n` +
+      `• <code>{mention}</code> — Clickable user mention\n` +
+      `• <code>{first_name}</code> — User's display name\n` +
+      `• <code>{balance}</code> — Player current balance\n` +
+      `• <code>{kills}</code> — Player total kills\n` +
+      `• <code>{b}Text{/b}</code> — <b>Bold text</b>\n` +
+      `• <code>{c}Text{/c}</code> — <code>Copiable monospace</code>\n` +
+      `• <code>{i}Text{/i}</code> — <i>Italic text</i>\n` +
+      `• <code>{q}Text{/q}</code> — Blockquote box\n\n` +
+      `<i>Send your custom message text below, or send <code>/default</code> to restore default wording.</i>`;
+
+    await editMessageText(chatId, messageId, helpMsg, {
+      inline_keyboard: [[{ text: "🔙 Cancel", callback_data: "dmui:root" }]],
+    });
     return true;
   }
 
-  if (action === "mod_button" || action === "btn_home") {
-    session.step = "IDLE";
-    session.tempButton = undefined;
+  // --- MEDIA MODULE ---
+  if (action === "mod_media") {
+    session.step = "AWAIT_CUSTOM_MEDIA";
     await DB_MANAGER.setSetting(env.DB, SESSION_KEY, session);
     await answerCallbackQuery(cq.id);
-    await renderButtonBuilderHome(chatId, session, messageId);
+
+    const currentMedia = session.draft.mediaType && session.draft.mediaType !== "none"
+      ? `Active: <b>${session.draft.mediaType.toUpperCase()}</b>`
+      : "Active: <b>None (Text-only)</b>";
+
+    const mediaPrompt =
+      `🖼 <b>CONFIGURE "/start" DM MEDIA</b>\n\n` +
+      `Current Status: ${currentMedia}\n\n` +
+      `• Send any <b>Photo</b> or <b>Video</b> directly in this chat to attach it to <code>/start</code>.\n` +
+      `• Send <code>/empty</code> to remove media completely and keep it text-only.`;
+
+    await editMessageText(chatId, messageId, mediaPrompt, {
+      inline_keyboard: [
+        [{ text: "🗑 Clear Media (/empty)", callback_data: "dmui:clear_media" }],
+        [{ text: "🔙 Cancel", callback_data: "dmui:root" }],
+      ],
+    });
     return true;
   }
+
+  if (action === "clear_media") {
+    session.draft.mediaType = "none";
+    session.draft.mediaFileId = undefined;
+    session.step = "IDLE";
+    await DB_MANAGER.setSetting(env.DB, SESSION_KEY, session);
+    await answerCallbackQuery(cq.id, "Media removed from draft.");
+    await editMessageText(chatId, messageId, `✅ <b>Media Cleared:</b> DM start message will be sent as plain text.`, {
+      inline_keyboard: [
+        [{ text: "✅ Apply Live", callback_data: "dmui:apply_live" }],
+        [{ text: "🔙 Back", callback_data: "dmui:root" }],
+      ],
+    });
+    return true;
+  }
+
 
   // ==========================================
   // ➕ GUIDED BUTTON CREATION WIZARD (Steps 1-5)
@@ -981,6 +1105,55 @@ export async function handleDMUITextInput(ctx: BotContext): Promise<boolean> {
   if (!session || session.step === "IDLE") return false;
 
   const input = ctx.text.trim();
+
+  // --- CAPTURE CUSTOM TEXT ---
+  if (session.step === "AWAIT_CUSTOM_TEXT") {
+    if (input === "/default") {
+      session.draft.customText = undefined;
+    } else {
+      session.draft.customText = input;
+    }
+    session.step = "IDLE";
+    await DB_MANAGER.setSetting(ctx.env.DB, SESSION_KEY, session);
+
+    await sendMessage(
+      ctx.chatId,
+      `✅ <b>Draft Text Saved!</b>\n\n` +
+      `Preview with test data:\n\n` +
+      `${renderCustomTemplate(session.draft.customText || "Hey, 💕 {first_name}!", { id: ctx.userId, first_name: ctx.message.from.first_name, balance: 1000, kills: 5 })}`,
+      {
+        inline_keyboard: [
+          [{ text: "💾 Save Draft", callback_data: "dmui:save_draft" }],
+          [{ text: "✅ Apply Live", callback_data: "dmui:apply_live" }],
+          [{ text: "🔙 Main Menu", callback_data: "dmui:root" }],
+        ],
+      }
+    );
+    return true;
+  }
+
+  // --- CAPTURE MEDIA TEXT COMMANDS ---
+  if (session.step === "AWAIT_CUSTOM_MEDIA") {
+    if (input === "/empty") {
+      session.draft.mediaType = "none";
+      session.draft.mediaFileId = undefined;
+      session.step = "IDLE";
+      await DB_MANAGER.setSetting(ctx.env.DB, SESSION_KEY, session);
+
+      await sendMessage(
+        ctx.chatId,
+        `✅ <b>Media Removed:</b> The DM <code>/start</code> interface is set to text-only mode.`,
+        {
+          inline_keyboard: [
+            [{ text: "✅ Apply Live", callback_data: "dmui:apply_live" }],
+            [{ text: "🔙 Main Menu", callback_data: "dmui:root" }],
+          ],
+        }
+      );
+      return true;
+    }
+  }
+
 
   if (session.step === "AWAIT_BTN_TEXT") {
     if (!session.tempButton) return false;
