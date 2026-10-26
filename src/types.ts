@@ -5,6 +5,52 @@
 // taaki TypeScript humari mistakes (bugs) pakad sake.
 
 // ====================================================
+export type ButtonLayout = "full" | "half";
+
+export type ButtonActionType =
+  | "submenu"
+  | "url"
+  | "command"
+  | "join"
+  | "back"
+  | "custom";
+
+export interface DMButton {
+  id: string;
+  text: string;
+  parentMenuId: string;
+  row: number;
+  position: number;
+  layout: ButtonLayout;
+  actionType: ButtonActionType;
+  actionValue: string; // URL, command name, target submenu ID, or custom action key
+}
+
+export interface DMMenu {
+  id: string;
+  name: string;
+  parentId?: string;
+}
+
+export interface DMUIConfig {
+  text?: string;
+  mediaType?: "photo" | "video" | "none";
+  mediaFileId?: string;
+  menus: Record<string, DMMenu>;
+  buttons: DMButton[];
+}
+
+export interface DMUISession {
+  ownerId: number;
+  activeMenuId: string;
+  step: string; // e.g., "IDLE", "AWAIT_BTN_TEXT", "AWAIT_BTN_URL", "AWAIT_SUBMENU_NAME", etc.
+  tempButton?: Partial<DMButton>;
+  editingButtonId?: string;
+  targetMenuId?: string;
+  draft: DMUIConfig;
+}
+
+
 export interface CloudflareEnv {
   DB: D1Database;
   BOT_TOKEN?: string;

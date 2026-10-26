@@ -74,6 +74,53 @@ export const DB_MANAGER = {
     return result.results || [];
   },
 
+
+  // ==========================================
+  // ⚙️ DM UI CONFIG & BUILDER STORAGE
+  // ==========================================
+  async ensureSettingsTable(db: D1Database): Promise<void> {
+    await db
+      .prepare(
+        `CREATE TABLE IF NOT EXISTS bot_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        )`
+      )
+      .run();
+  },
+
+  async getSetting<T>(db: D1Database, key: string): Promise<T | null> {
+    await this.ensureSettingsTable(db);
+    const row = await db
+      .prepare("SELECT value FROM bot_settings WHERE key = ?")
+      .bind(key)
+      .first<{ value: string }>();
+    if (!row) return null;
+    try {
+      return JSON.parse(row.value) as T;
+    } catch {
+      return null;
+    }
+  },
+
+  async setSetting(db: D1Database, key: string, value: any): Promise<void> {
+    await this.ensureSettingsTable(db);
+    const serialized = JSON.stringify(value);
+    await db
+      .prepare(
+        `INSERT INTO bot_settings (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      )
+      .bind(key, serialized)
+      .run();
+  },
+
+  async deleteSetting(db: D1Database, key: string): Promise<void> {
+    await this.ensureSettingsTable(db);
+    await db.prepare("DELETE FROM bot_settings WHERE key = ?").bind(key).run();
+  },
+
+
   // ==========================================
   // 🎒 INVENTORY OPERATIONS
   // ==========================================

@@ -1,8 +1,16 @@
-import { BotContext, CommandHandler, CloudflareEnv, TelegramMessage, TelegramUser } from "../types";
+import {
+  BotContext,
+  CommandHandler,
+  CloudflareEnv,
+  TelegramMessage,
+  TelegramUser,
+  DMUIConfig,
+} from "../types";
 import { DB_MANAGER } from "../db";
 import { CONFIG } from "../config";
 import { toCustomFont } from "../ui";
 import { sendMessage } from "../index";
+import { getDefaultDMUIConfig, compileMenuKeyboard } from "./dmui";
 
 // ==========================================
 // 👋 GROUP WELCOME HANDLER
@@ -47,7 +55,7 @@ export const systemHandlers: Record<string, CommandHandler> = {
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // --- GROUP CONTEXT: Reply UI ---
+    // --- GROUP CONTEXT: Replied DM Introduction ---
     if (!isPrivate) {
       const styledName = toCustomFont(safeName);
       const text = `<blockquote>𝙷𝖾ᥣᥣⱺ, ${styledName} 💕\n\n𝚂𝗍α𝗋𝗍 α 𝙳𝙼 𝗍ⱺ υ𝗌𝖾 αᥣᥣ 𝗍ɦ𝖾 𝖿𝖾α𝗍υ𝗋𝖾𝗌.</blockquote>`;
@@ -67,7 +75,12 @@ export const systemHandlers: Record<string, CommandHandler> = {
         ],
       };
 
-      await sendMessage(ctx.chatId, text, inlineKeyboard, ctx.message.message_id);
+      await sendMessage(
+        ctx.chatId,
+        text,
+        inlineKeyboard,
+        ctx.message.message_id
+      );
       return;
     }
 
@@ -91,34 +104,33 @@ export const systemHandlers: Record<string, CommandHandler> = {
       `💵 "/rob" — Attempt to steal money\n` +
       `🛡️ "/safe" — Keep your money safe`;
 
-    const dmKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "📖 Help", callback_data: "help" },
-        ],
-        [
-          { text: "📢 Updates", callback_data: "updates" },
-          { text: "💬 Feedback", callback_data: "feedback" },
-        ],
-        [
-          { text: "➕ Add Me to Your Group", url: "https://t.me/Myaloobot?startgroup=true" },
-        ],
-      ],
-    };
+    const liveConfig =
+      (await DB_MANAGER.getSetting<DMUIConfig>(
+        ctx.env.DB,
+        "dmui_live_config"
+      )) || getDefaultDMUIConfig();
+
+    const dmKeyboard = compileMenuKeyboard(liveConfig, "root", false);
 
     await sendMessage(ctx.chatId, dmText, dmKeyboard);
   },
 
   "/ping": async (ctx: BotContext) => {
     const start = Date.now();
-    await sendMessage(ctx.chatId, `🏓 <b>Pong!</b> <code>${Date.now() - start}ms</code>`);
+    await sendMessage(
+      ctx.chatId,
+      `🏓 <b>Pong!</b> <code>${Date.now() - start}ms</code>`
+    );
   },
 
   "/top": async (ctx: BotContext) => {
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
 
     if (!topPlayers || topPlayers.length === 0) {
-      await sendMessage(ctx.chatId, "🏆 <b>No active operatives registered.</b>");
+      await sendMessage(
+        ctx.chatId,
+        "🏆 <b>No active operatives registered.</b>"
+      );
       return;
     }
 

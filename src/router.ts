@@ -1,12 +1,12 @@
 import { BotContext, CommandHandler, TelegramUpdate, CloudflareEnv } from "./types";
 import { DB_MANAGER } from "./db";
-import { handleWelcome } from "./modules/system";
+import { handleWelcome, systemHandlers } from "./modules/system";
 import { adminHandlers } from "./modules/admin";
 import { vaultHandlers } from "./modules/vault";
 import { combatHandlers } from "./modules/combat";
 import { entertainmentHandlers } from "./modules/entertainment";
-import { systemHandlers } from "./modules/system";
 import { helpHandlers } from "./modules/help";
+import { dmuiHandlers, handleDMUICallback, handleDMUITextInput } from "./modules/dmui";
 import { answerCallbackQuery } from "./index";
 
 const commandRegistry: Record<string, CommandHandler> = {
@@ -16,46 +16,42 @@ const commandRegistry: Record<string, CommandHandler> = {
   ...combatHandlers,
   ...adminHandlers,
   ...entertainmentHandlers,
+  ...dmuiHandlers,
 };
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
-  // 1. Handle Inline Button Callbacks (Help, Updates, Feedback)
+  // 1. Handle Inline Button Callbacks
   if (update.callback_query) {
     const cq = update.callback_query;
-    const data = cq.data;
-    const chatId = cq.message?.chat?.id;
-    const userId = cq.from?.id;
+    const data: string = cq.data || "";
 
-    if (!chatId || !userId) return;
-
-    if (data === "help") {
+    // Execute permitted bot command triggered by a custom DM /start button
+    if (data.startsWith("dm_cmd:")) {
+      const cmd = data.replace("dm_cmd:", "");
+      const handler = commandRegistry[cmd];
       await answerCallbackQuery(cq.id);
-      const ctx: BotContext = {
-        env,
-        update,
-        message: cq.message,
-        chatId,
-        userId,
-        text: "/help",
-        command: "/help",
-        args: [],
-      };
-      await helpHandlers["/help"](ctx);
+      if (handler && cq.message && cq.from) {
+        const ctx: BotContext = {
+          env,
+          update,
+          message: { ...cq.message, from: cq.from },
+          chatId: cq.message.chat.id,
+          userId: cq.from.id,
+          text: cmd,
+          command: cmd,
+          args: [],
+        };
+        await handler(ctx);
+      }
       return;
     }
 
-    if (data === "updates") {
-      await answerCallbackQuery(cq.id, "📢 Updates will be posted here as new features launch!", true);
-      return;
-    }
-
-    if (data === "feedback") {
-      await answerCallbackQuery(cq.id, "💬 Have suggestions or feedback? Send a message directly in this chat!", true);
-      return;
-    }
+    // Route DMUI Builder & Submenu Navigation Callbacks
+    const handledByDMUI = await handleDMUICallback(env, cq);
+    if (handledByDMUI) return;
   }
 
-  // 2. Handle Chat Member Updates (Supergroup direct additions)
+  // 2. Handle Supergroup Member Additions
   if (update.chat_member) {
     const cm = update.chat_member;
     const oldStatus = cm.old_chat_member?.status;
@@ -80,20 +76,37 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   const chatId = message.chat.id;
   const userId = message.from.id;
 
-  // 3. Ensure user exists in database
   await DB_MANAGER.ensureUserExists(env.DB, userId);
 
-  // 4. Handle Service Message joins and member additions
-  const newMembers = message.new_chat_members || ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
+  // 3. Handle Group Welcome Joins
+  const newMembers =
+    message.new_chat_members ||
+    ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
   if (newMembers.length > 0) {
     await handleWelcome(env, message, newMembers);
     return;
   }
 
   const rawText = message.text?.trim();
-  if (!rawText || !rawText.startsWith("/")) return;
+  if (!rawText) return;
 
-  // 5. Command Parsing and Routing
+  // 4. Intercept Owner Text Input during active /dmui Wizard Steps
+  if (!rawText.startsWith("/")) {
+    const ctx: BotContext = {
+      env,
+      update,
+      message,
+      chatId,
+      userId,
+      text: rawText,
+      command: "",
+      args: [],
+    };
+    await handleDMUITextInput(ctx);
+    return;
+  }
+
+  // 5. Standard Command Routing (also allows command input during Step 4 Command Wizard)
   const parts = rawText.split(/\s+/);
   const command = parts[0].toLowerCase().split("@")[0];
   const args = parts.slice(1);
@@ -109,6 +122,10 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     args,
     reply: message.reply_to_message,
   };
+
+  if (command !== "/dmui" && (await handleDMUITextInput(ctx))) {
+    return;
+  }
 
   const handler = commandRegistry[command];
   if (handler) {
