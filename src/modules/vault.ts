@@ -98,62 +98,59 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
 
   // ==========================================
-  // 🎁 /daily - Claim Daily Operative Allowance
+  // 🎁 /daily - Claim Daily Allowance (₹1,000)
   // ==========================================
   "/daily": async (ctx: BotContext) => {
-    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    if (!user) return;
+    // 1. Ensure user record exists
+    await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
 
-    if (user.is_alive === 0) {
-      await sendMessage(
-        ctx.chatId,
-        "💀 You are eliminated. Revive first using <code>/revive</code> before claiming funds."
-      );
-      return;
-    }
-
-    const DAILY_REWARD = 250;
+    const REWARD = 1000;
     const COOLDOWN_SECONDS = 86400; // 24 hours
     const now = Math.floor(Date.now() / 1000);
-    const lastDaily = user.last_daily ?? 0;
 
-    if (now - lastDaily < COOLDOWN_SECONDS) {
-      const remainingSeconds = COOLDOWN_SECONDS - (now - lastDaily);
-      const hours = Math.floor(remainingSeconds / 3600);
-      const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    // 2. Atomic claim operation:
+    // Only updates if 24 hours (86,400 seconds) have elapsed since last_daily.
+    // This prevents race conditions and simultaneous duplicate claims.
+    const result = await ctx.env.DB.prepare(
+      `UPDATE users
+       SET balance = balance + ?, last_daily = ?
+       WHERE user_id = ? AND (? - COALESCE(last_daily, 0) >= ?)`
+    )
+      .bind(REWARD, now, ctx.userId, now, COOLDOWN_SECONDS)
+      .run();
 
-      const card = createStatusCard({
-        title: "⏳ DAILY ON COOLDOWN",
-        rows: [
-          { label: "👤 OPERATIVE", value: ctx.message.from.first_name },
-          { label: "⏳ REMAINING", value: `${hours}h ${minutes}m` },
-          { label: "💰 REWARD", value: `₹${DAILY_REWARD}` },
-          { label: "💼 CASH", value: `₹${user.balance}` },
-        ],
-        footer: "⏰ Cooldown active • Come back tomorrow for your allowance.",
-      });
+    // 3. Successful Claim
+    if (result.meta?.changes && result.meta.changes > 0) {
+      const successText =
+        `🎁 <b>Daily Reward Claimed!</b>\n\n` +
+        `💰 You received ₹1,000.\n\n` +
+        `Come back after 24 hours for your next reward!`;
 
-      await sendMessage(ctx.chatId, card);
+      await sendMessage(ctx.chatId, successText, undefined, ctx.message.message_id);
       return;
     }
 
-    const newBalance = user.balance + DAILY_REWARD;
-    await ctx.env.DB.prepare("UPDATE users SET balance = ?, last_daily = ? WHERE user_id = ?")
-      .bind(newBalance, now, ctx.userId)
-      .run();
+    // 4. Cooldown Active: Fetch remaining time
+    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+    const lastDaily = user?.last_daily ?? 0;
+    const elapsed = now - lastDaily;
+    const remainingSeconds = Math.max(0, COOLDOWN_SECONDS - elapsed);
 
-    const card = createStatusCard({
-      title: "🎁 DAILY ALLOWANCE",
-      rows: [
-        { label: "👤 OPERATIVE", value: ctx.message.from.first_name },
-        { label: "💰 REWARD", value: `+₹${DAILY_REWARD}` },
-        { label: "💼 NEW CASH", value: `₹${newBalance}` },
-        { label: "🔋 AMMO", value: `${user.ammo ?? 0} rounds` },
-      ],
-      footer: "⚡ Allowance collected. Next claim available in 24 hours.",
-    });
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
 
-    await sendMessage(ctx.chatId, card);
+    const timeParts: string[] = [];
+    if (hours > 0) timeParts.push(`${hours}h`);
+    if (minutes > 0 || hours > 0) timeParts.push(`${minutes}m`);
+    timeParts.push(`${seconds}s`);
+    const formattedRemaining = timeParts.join(" ");
+
+    const cooldownText =
+      `⏳ <b>You've already claimed your daily reward.</b>\n\n` +
+      `Next reward available in: ${formattedRemaining}`;
+
+    await sendMessage(ctx.chatId, cooldownText, undefined, ctx.message.message_id);
   },
 
 
