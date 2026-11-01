@@ -13,6 +13,14 @@ export const DB_MANAGER = {
   // 👤 USER OPERATIONS
   // ==========================================
   async ensureUserExists(db: D1Database, userId: number): Promise<void> {
+    // 1. Auto-migrate: ensure the column exists on existing databases
+    try {
+      await db.prepare("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0").run();
+    } catch {
+      // Column already exists, safe to ignore
+    }
+
+    // 2. Check and register user if not found
     const existing = await db
       .prepare("SELECT user_id FROM users WHERE user_id = ?")
       .bind(userId)
@@ -27,7 +35,7 @@ export const DB_MANAGER = {
         .run();
     }
   },
-
+ 
   async getUser(db: D1Database, userId: number): Promise<UserData | null> {
     const user = await db
       .prepare("SELECT * FROM users WHERE user_id = ?")

@@ -96,61 +96,70 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     await vaultHandlers["/b"](ctx);
   },
 
-
   // ==========================================
   // 🎁 /daily - Claim Daily Allowance (₹1,000)
   // ==========================================
   "/daily": async (ctx: BotContext) => {
-    // 1. Ensure user record exists
-    await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+    try {
+      // 1. Ensure user exists and table has last_daily column
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
 
-    const REWARD = 1000;
-    const COOLDOWN_SECONDS = 86400; // 24 hours
-    const now = Math.floor(Date.now() / 1000);
+      const REWARD = 1000;
+      const COOLDOWN_SECONDS = 86400; // 24 hours
+      const now = Math.floor(Date.now() / 1000);
+      const threshold = now - COOLDOWN_SECONDS;
 
-    // 2. Atomic claim operation:
-    // Only updates if 24 hours (86,400 seconds) have elapsed since last_daily.
-    // This prevents race conditions and simultaneous duplicate claims.
-    const result = await ctx.env.DB.prepare(
-      `UPDATE users
-       SET balance = balance + ?, last_daily = ?
-       WHERE user_id = ? AND (? - COALESCE(last_daily, 0) >= ?)`
-    )
-      .bind(REWARD, now, ctx.userId, now, COOLDOWN_SECONDS)
-      .run();
+      // 2. Atomic update query:
+      // Eligible only if last_daily is NULL, 0, or older than 24 hours ago (threshold)
+      const updateResult = await ctx.env.DB.prepare(
+        `UPDATE users
+         SET balance = balance + ?, last_daily = ?
+         WHERE user_id = ? AND (last_daily IS NULL OR last_daily = 0 OR last_daily <= ?)`
+      )
+        .bind(REWARD, now, ctx.userId, threshold)
+        .run();
 
-    // 3. Successful Claim
-    if (result.meta?.changes && result.meta.changes > 0) {
-      const successText =
-        `🎁 <b>Daily Reward Claimed!</b>\n\n` +
-        `💰 You received ₹1,000.\n\n` +
-        `Come back after 24 hours for your next reward!`;
+      const changes = updateResult.meta?.changes ?? updateResult.meta?.rows_written ?? 0;
 
-      await sendMessage(ctx.chatId, successText, undefined, ctx.message.message_id);
-      return;
+      // 3. Successful Claim
+      if (changes > 0) {
+        const successText =
+          `🎁 <b>Daily Reward Claimed!</b>\n\n` +
+          `💰 You received ₹1,000.\n\n` +
+          `Come back after 24 hours for your next reward!`;
+
+        await sendMessage(ctx.chatId, successText, undefined, ctx.message?.message_id);
+        return;
+      }
+
+      // 4. Cooldown Active: Fetch exact remaining time
+      const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      const lastDaily = user?.last_daily ?? 0;
+      const elapsed = now - lastDaily;
+      const remainingSeconds = Math.max(0, COOLDOWN_SECONDS - elapsed);
+
+      const hours = Math.floor(remainingSeconds / 3600);
+      const minutes = Math.floor((remainingSeconds % 3600) / 60);
+      const seconds = remainingSeconds % 60;
+
+      const timeParts: string[] = [];
+      if (hours > 0) timeParts.push(`${hours}h`);
+      if (minutes > 0 || hours > 0) timeParts.push(`${minutes}m`);
+      timeParts.push(`${seconds}s`);
+      const formattedRemaining = timeParts.join(" ") || "a few seconds";
+
+      const cooldownText =
+        `⏳ <b>You've already claimed your daily reward.</b>\n\n` +
+        `Next reward available in: "${formattedRemaining}"`;
+
+      await sendMessage(ctx.chatId, cooldownText, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Daily handler failure:", err);
+      await sendMessage(
+        ctx.chatId,
+        `⚠️ <b>Error processing daily:</b> <code>${err?.message || "Internal error"}</code>`
+      );
     }
-
-    // 4. Cooldown Active: Fetch remaining time
-    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    const lastDaily = user?.last_daily ?? 0;
-    const elapsed = now - lastDaily;
-    const remainingSeconds = Math.max(0, COOLDOWN_SECONDS - elapsed);
-
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
-    const seconds = remainingSeconds % 60;
-
-    const timeParts: string[] = [];
-    if (hours > 0) timeParts.push(`${hours}h`);
-    if (minutes > 0 || hours > 0) timeParts.push(`${minutes}m`);
-    timeParts.push(`${seconds}s`);
-    const formattedRemaining = timeParts.join(" ");
-
-    const cooldownText =
-      `⏳ <b>You've already claimed your daily reward.</b>\n\n` +
-      `Next reward available in: ${formattedRemaining}`;
-
-    await sendMessage(ctx.chatId, cooldownText, undefined, ctx.message.message_id);
   },
 
 
