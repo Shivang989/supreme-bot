@@ -142,7 +142,7 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: CloudflareEnv, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(BROADCAST_ENGINE.processBatch(env.DB, 50));
+    ctx.waitUntil(BROADCAST_ENGINE.runContinuousWorker(env.DB, 25000));
   },
 };
 
