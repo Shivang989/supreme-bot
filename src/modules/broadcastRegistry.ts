@@ -1,42 +1,56 @@
 import { TelegramMessage, TelegramUpdate } from "../types";
 
+
 export const BROADCAST_REGISTRY = {
   async trackDestination(db: D1Database, chat: { id: number; type: string; title?: string }): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
-    await db.prepare(
-      `INSERT INTO broadcast_chat_registry (chat_id, chat_type, title, can_send, updated_at)
-       VALUES (?, ?, ?, 1, ?)
-       ON CONFLICT(chat_id) DO UPDATE SET
-         chat_type = excluded.chat_type,
-         title = COALESCE(excluded.title, broadcast_chat_registry.title),
-         can_send = 1,
-         updated_at = excluded.updated_at`
-    ).bind(chat.id, chat.type, chat.title || null, now).run();
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      await db.prepare(
+        `INSERT INTO broadcast_chat_registry (chat_id, chat_type, title, can_send, updated_at)
+         VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT(chat_id) DO UPDATE SET
+           chat_type = excluded.chat_type,
+           title = COALESCE(excluded.title, broadcast_chat_registry.title),
+           can_send = 1,
+           updated_at = excluded.updated_at`
+      ).bind(chat.id, chat.type, chat.title || null, now).run();
+    } catch (err) {
+      console.error("Non-fatal registry trackDestination error:", err);
+    }
   },
 
   async trackUser(db: D1Database, from: { id: number; first_name?: string; username?: string }): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
-    await db.prepare(
-      `INSERT INTO broadcast_user_registry (user_id, first_name, username, last_interaction)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET
-         first_name = excluded.first_name,
-         username = excluded.username,
-         last_interaction = excluded.last_interaction`
-    ).bind(from.id, from.first_name || "User", from.username || null, now).run();
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      await db.prepare(
+        `INSERT INTO broadcast_user_registry (user_id, first_name, username, last_interaction)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id) DO UPDATE SET
+           first_name = excluded.first_name,
+           username = excluded.username,
+           last_interaction = excluded.last_interaction`
+      ).bind(from.id, from.first_name || "User", from.username || null, now).run();
+    } catch (err) {
+      console.error("Non-fatal registry trackUser error:", err);
+    }
   },
 
   async trackGroupMember(db: D1Database, chatId: number, from: { id: number; first_name: string; username?: string }): Promise<void> {
-    const now = Math.floor(Date.now() / 1000);
-    await db.prepare(
-      `INSERT INTO broadcast_group_members (chat_id, user_id, first_name, username, last_seen)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(chat_id, user_id) DO UPDATE SET
-         first_name = excluded.first_name,
-         username = excluded.username,
-         last_seen = excluded.last_seen`
-    ).bind(chatId, from.id, from.first_name, from.username || null, now).run();
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      await db.prepare(
+        `INSERT INTO broadcast_group_members (chat_id, user_id, first_name, username, last_seen)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(chat_id, user_id) DO UPDATE SET
+           first_name = excluded.first_name,
+           username = excluded.username,
+           last_seen = excluded.last_seen`
+      ).bind(chatId, from.id, from.first_name, from.username || null, now).run();
+    } catch (err) {
+      console.error("Non-fatal registry trackGroupMember error:", err);
+    }
   },
+
 
   async handleChatMemberUpdated(db: D1Database, update: TelegramUpdate): Promise<void> {
     const myChatMember = (update as any).my_chat_member;
