@@ -42,16 +42,33 @@ export const broadcastHandlers: Record<string, CommandHandler> = {
   },
 };
 
-export async function renderDashboard(db: D1Database, chatId: number, scope: BroadcastScope, messageId?: number): Promise<void> {
-  const users = await db.prepare("SELECT COUNT(*) as c FROM broadcast_user_registry WHERE is_opted_out = 0 AND is_blocked = 0").first<{ c: number }>();
-  const groups = await db.prepare("SELECT COUNT(*) as c FROM broadcast_chat_registry WHERE chat_type IN ('group', 'supergroup') AND can_send = 1").first<{ c: number }>();
-  const channels = await db.prepare("SELECT COUNT(*) as c FROM broadcast_chat_registry WHERE chat_type = 'channel' AND can_send = 1").first<{ c: number }>();
-  const active = await db.prepare("SELECT COUNT(*) as c FROM broadcast_campaigns WHERE status = 'running'").first<{ c: number }>();
+export async function renderDashboard(
+  db: D1Database,
+  chatId: number,
+  scope: BroadcastScope,
+  messageId?: number
+): Promise<void> {
+  const users = await db
+    .prepare("SELECT COUNT(*) as c FROM broadcast_user_registry WHERE is_opted_out = 0 AND is_blocked = 0")
+    .first<{ c: number }>();
+  const groups = await db
+    .prepare("SELECT COUNT(*) as c FROM broadcast_chat_registry WHERE chat_type IN ('group', 'supergroup') AND can_send = 1")
+    .first<{ c: number }>();
+  const channels = await db
+    .prepare("SELECT COUNT(*) as c FROM broadcast_chat_registry WHERE chat_type = 'channel' AND can_send = 1")
+    .first<{ c: number }>();
+  const active = await db
+    .prepare("SELECT COUNT(*) as c FROM broadcast_campaigns WHERE status = 'running'")
+    .first<{ c: number }>();
 
-  const title = scope === "dm_only" ? "📢 <b>ALOO BROADCAST MANAGER (DM ONLY)</b>" : "📢 <b>ALOO GLOBAL BROADCAST MANAGER</b>";
-  const breakdown = scope === "dm_only"
-    ? `• <b>Eligible Private Users:</b> <code>${users?.c || 0}</code>\n`
-    : `• <b>Private Users:</b> <code>${users?.c || 0}</code>\n• <b>Groups & Supergroups:</b> <code>${groups?.c || 0}</code>\n• <b>Channels:</b> <code>${channels?.c || 0}</code>\n`;
+  const title =
+    scope === "dm_only"
+      ? "📢 <b>ALOO BROADCAST MANAGER (DM ONLY)</b>"
+      : "📢 <b>ALOO GLOBAL BROADCAST MANAGER</b>";
+  const breakdown =
+    scope === "dm_only"
+      ? `• <b>Eligible Private Users:</b> <code>${users?.c || 0}</code>\n`
+      : `• <b>Private Users:</b> <code>${users?.c || 0}</code>\n• <b>Groups & Supergroups:</b> <code>${groups?.c || 0}</code>\n• <b>Channels:</b> <code>${channels?.c || 0}</code>\n`;
 
   const text =
     `${title}\n━━━━━━━━━━━━━━━━━━━━\n` +
@@ -93,17 +110,127 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
+  // Parameter extraction defined before any action branching
   const parts = data.split(":");
   const action = parts[1];
   const scope = (parts[2] as BroadcastScope) || "global";
 
+  // 1. Dashboard refresh
   if (action === "dash") {
     await answerCallbackQuery(cq.id);
     await renderDashboard(env.DB, chatId, scope, messageId);
     return true;
   }
 
-  // 1. Initializing New Campaign Wizard
+  // 2. Active Campaigns
+  if (action === "active") {
+    const list = await env.DB.prepare(
+      "SELECT id, name, status, created_at FROM broadcast_campaigns WHERE status IN ('running', 'paused') ORDER BY created_at DESC LIMIT 10"
+    ).all<any>();
+
+    await answerCallbackQuery(cq.id);
+
+    if (!list.results || list.results.length === 0) {
+      await editMessageText(
+        chatId,
+        messageId,
+        `📊 <b>ACTIVE CAMPAIGN LIST</b>\n\nThere are no campaigns currently running or paused.`,
+        {
+          inline_keyboard: [
+            [{ text: "➕ Create New", callback_data: `bc:new:${scope}` }],
+            [{ text: "🔙 Back to Dashboard", callback_data: `bc:dash:${scope}` }],
+          ],
+        }
+      );
+      return true;
+    }
+
+    const kbRows = list.results.map((c) => [
+      { text: `${c.status === "paused" ? "⏸" : "▶️"} ${c.name}`, callback_data: `bc:view:${c.id}` },
+    ]);
+    kbRows.push([{ text: "🔙 Return to Dashboard", callback_data: `bc:dash:${scope}` }]);
+
+    await editMessageText(
+      chatId,
+      messageId,
+      `📊 <b>ACTIVE CAMPAIGNS (${list.results.length})</b>\n\nSelect a campaign to manage:`,
+      { inline_keyboard: kbRows }
+    );
+    return true;
+  }
+
+  // 3. Scheduled Campaigns
+  if (action === "sched") {
+    const list = await env.DB.prepare(
+      "SELECT id, name, scheduled_at FROM broadcast_campaigns WHERE status = 'scheduled' ORDER BY scheduled_at ASC LIMIT 10"
+    ).all<any>();
+
+    await answerCallbackQuery(cq.id);
+
+    if (!list.results || list.results.length === 0) {
+      await editMessageText(
+        chatId,
+        messageId,
+        `📅 <b>SCHEDULED CAMPAIGNS</b>\n\nThere are no campaigns scheduled for future delivery.`,
+        {
+          inline_keyboard: [
+            [{ text: "➕ Create New", callback_data: `bc:new:${scope}` }],
+            [{ text: "🔙 Back to Dashboard", callback_data: `bc:dash:${scope}` }],
+          ],
+        }
+      );
+      return true;
+    }
+
+    const kbRows = list.results.map((c) => [
+      { text: `⏰ ${c.name}`, callback_data: `bc:view:${c.id}` },
+    ]);
+    kbRows.push([{ text: "🔙 Return to Dashboard", callback_data: `bc:dash:${scope}` }]);
+
+    await editMessageText(
+      chatId,
+      messageId,
+      `📅 <b>SCHEDULED CAMPAIGNS</b>\n\nSelect a campaign:`,
+      { inline_keyboard: kbRows }
+    );
+    return true;
+  }
+
+  // 4. Campaign History
+  if (action === "hist") {
+    const list = await env.DB.prepare(
+      "SELECT id, name, status, created_at FROM broadcast_campaigns WHERE status IN ('completed', 'cancelled') ORDER BY created_at DESC LIMIT 8"
+    ).all<any>();
+
+    await answerCallbackQuery(cq.id);
+
+    if (!list.results || list.results.length === 0) {
+      await editMessageText(
+        chatId,
+        messageId,
+        `📜 <b>CAMPAIGN HISTORY</b>\n\nNo finished or cancelled campaigns recorded yet.`,
+        {
+          inline_keyboard: [[{ text: "🔙 Back to Dashboard", callback_data: `bc:dash:${scope}` }]],
+        }
+      );
+      return true;
+    }
+
+    const kbRows = list.results.map((c) => [
+      { text: `${c.status === "completed" ? "✅" : "🛑"} ${c.name}`, callback_data: `bc:view:${c.id}` },
+    ]);
+    kbRows.push([{ text: "🔙 Return to Dashboard", callback_data: `bc:dash:${scope}` }]);
+
+    await editMessageText(
+      chatId,
+      messageId,
+      `📜 <b>CAMPAIGN HISTORY</b>\n\nSelect a campaign to review final analytics:`,
+      { inline_keyboard: kbRows }
+    );
+    return true;
+  }
+
+  // 5. Initializing New Campaign Wizard
   if (action === "new") {
     const campaignId = `bc_${Date.now().toString(36)}`;
     const draft: BroadcastDraft = {
@@ -145,7 +272,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
-  // 2. Select Forward or Copy
+  // 6. Select Forward or Copy
   if (action === "set_mode") {
     const selectedMode = parts[3] as "copy" | "forward";
     const wiz = await env.DB.prepare("SELECT session_data FROM broadcast_wizards WHERE owner_id = ?").bind(userId).first<{ session_data: string }>();
@@ -161,7 +288,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
-  // 3. Toggle Options (Pinning, Tag All, Silent)
+  // 7. Toggle Options (Pinning, Tag All, Silent)
   if (action === "toggle_opt") {
     const opt = parts[3];
     const wiz = await env.DB.prepare("SELECT session_data FROM broadcast_wizards WHERE owner_id = ?").bind(userId).first<{ session_data: string }>();
@@ -184,7 +311,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
-  // 4. Test Delivery to Owner
+  // 8. Test Delivery to Owner
   if (action === "test_send") {
     const wiz = await env.DB.prepare("SELECT session_data FROM broadcast_wizards WHERE owner_id = ?").bind(userId).first<{ session_data: string }>();
     if (!wiz) return true;
@@ -206,13 +333,12 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
-  // 5. Final Confirmation & Run Execution
+  // 9. Final Confirmation & Run Execution
   if (action === "confirm_run") {
     const wiz = await env.DB.prepare("SELECT session_data FROM broadcast_wizards WHERE owner_id = ?").bind(userId).first<{ session_data: string }>();
     if (!wiz) return true;
     const draft: BroadcastDraft = JSON.parse(wiz.session_data);
 
-    // Resolve snapshot audience
     const audience = await BROADCAST_REGISTRY.resolveEligibleAudience(env.DB, draft.scope, draft.audienceFilter);
     if (audience.length === 0) {
       await answerCallbackQuery(cq.id, "⚠️ No eligible recipients available for this audience.", true);
@@ -221,7 +347,6 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
 
     const now = Math.floor(Date.now() / 1000);
 
-    // Persist Campaign
     await env.DB.prepare(
       `INSERT INTO broadcast_campaigns (
         id, name, scope, mode, content_type, content_payload, button_payload, audience_filter,
@@ -249,10 +374,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
       now
     ).run();
 
-    // Create Recipient & Job Snapshots
     await BROADCAST_ENGINE.snapshotAudience(env.DB, draft.campaignId, audience);
-
-    // Clean active wizard
     await env.DB.prepare("DELETE FROM broadcast_wizards WHERE owner_id = ?").bind(userId).run();
 
     await answerCallbackQuery(cq.id, "🚀 Campaign initiated!");
@@ -267,12 +389,12 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
       { inline_keyboard: [[{ text: "📊 Monitor Campaign", callback_data: `bc:view:${draft.campaignId}` }]] }
     );
 
-    // Dispatch initial batch immediately
-    await BROADCAST_ENGINE.processBatch(env.DB, 25);
+    // Run continuous delivery worker loop
+    await BROADCAST_ENGINE.runContinuousWorker(env.DB, 25000);
     return true;
   }
 
-  // 6. View & Control Active Campaign
+  // 10. View & Control Active Campaign
   if (action === "view") {
     const cId = parts[2];
     const camp = await env.DB.prepare("SELECT * FROM broadcast_campaigns WHERE id = ?").bind(cId).first<any>();
@@ -322,7 +444,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     return true;
   }
 
-  // 7. Pause, Resume, Cancel Actions
+  // 11. Pause, Resume, Cancel Actions
   if (action === "pause") {
     const cId = parts[2];
     await env.DB.prepare("UPDATE broadcast_campaigns SET status = 'paused' WHERE id = ?").bind(cId).run();
@@ -335,7 +457,7 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
     const cId = parts[2];
     await env.DB.prepare("UPDATE broadcast_campaigns SET status = 'running' WHERE id = ?").bind(cId).run();
     await answerCallbackQuery(cq.id, "Campaign resumed.");
-    await BROADCAST_ENGINE.processBatch(env.DB, 25);
+    await BROADCAST_ENGINE.runContinuousWorker(env.DB, 25000);
     await handleBroadcastCallback(env, { ...cq, data: `bc:view:${cId}` });
     return true;
   }
@@ -385,7 +507,6 @@ export async function handleBroadcastMessageInput(ctx: BotContext): Promise<bool
     return false;
   }
 }
-
 
 async function renderOptionsStep(db: D1Database, chatId: number, draft: BroadcastDraft, messageId?: number): Promise<void> {
   const pinDisplay = draft.pinMode === "none" ? "OFF" : draft.pinMode === "quiet" ? "QUIET" : "LOUD";
