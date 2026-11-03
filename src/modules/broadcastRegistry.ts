@@ -84,7 +84,23 @@ export const BROADCAST_REGISTRY = {
       .run();
   },
 
-  async resolveEligibleAudience(db: D1Database, scope: "global" | "dm_only", audienceFilter: string): Promise<Array<{ id: number; type: string }>> {
+  async resolveEligibleAudience(
+    db: D1Database,
+    scope: "global" | "dm_only",
+    audienceFilter: string
+  ): Promise<Array<{ id: number; type: string }>> {
+    // 1. Sync existing economy players into broadcast_user_registry
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      await db.prepare(`
+        INSERT OR IGNORE INTO broadcast_user_registry (user_id, first_name, is_opted_out, is_blocked, last_interaction)
+        SELECT user_id, 'Player', 0, 0, ? FROM users
+      `).bind(now).run();
+    } catch (e) {
+      console.error("User sync error:", e);
+    }
+
+    // 2. Fetch based on scope and filter
     if (scope === "dm_only" || audienceFilter === "private") {
       const res = await db.prepare(
         `SELECT user_id as id, 'private' as type 
@@ -112,7 +128,7 @@ export const BROADCAST_REGISTRY = {
       return res.results || [];
     }
 
-    // Default: 'all' combined
+    // Default: 'all' destinations
     const users = await db.prepare(
       `SELECT user_id as id, 'private' as type 
        FROM broadcast_user_registry 
@@ -127,4 +143,5 @@ export const BROADCAST_REGISTRY = {
 
     return [...(users.results || []), ...(chats.results || [])];
   },
+
 };

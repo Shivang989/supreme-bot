@@ -161,5 +161,6 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   }
 
   // 7. Advance active broadcast queues in background
-  await BROADCAST_ENGINE.processBatch(env.DB, 15);
+  // Advance active broadcast queues continuously
+  await BROADCAST_ENGINE.runContinuousWorker(env.DB, 8000);
 }

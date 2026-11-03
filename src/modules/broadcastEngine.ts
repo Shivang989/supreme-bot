@@ -37,9 +37,24 @@ export const BROADCAST_ENGINE = {
     }
   },
 
-  async processBatch(db: D1Database, batchSize: number = 25): Promise<{ processed: number; remaining: number }> {
+  // Continuously process batches in background until queue is empty or time limit hits
+  async runContinuousWorker(db: D1Database, maxRunTimeMs: number = 25000): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < maxRunTimeMs) {
+      const { processed, remaining } = await this.processBatch(db, 20);
+      if (processed === 0 || remaining === 0) break;
+      // 40ms interval ensures we do not trip Telegram's 30 msg/sec global limit
+      await new Promise((r) => setTimeout(r, 40));
+    }
+  },
+ 
+
+ async processBatch(db: D1Database, batchSize: number = 25): Promise<{ processed: number; remaining: number }> {
     const now = Math.floor(Date.now() / 1000);
     const leaseId = now + 45; // 45 seconds lease time
+
+      // Add pace delay between sends
+      await new Promise((r) => setTimeout(r, 35));
 
     // Reclaim expired worker leases & activate retryable jobs
     await db.prepare(
