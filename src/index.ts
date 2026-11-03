@@ -1,6 +1,8 @@
 import { TelegramUpdate, CloudflareEnv } from "./types";
 import { handleMessage } from "./router";
 import { CONFIG } from "./config";
+import { BROADCAST_ENGINE } from "./modules/broadcastEngine";
+
 
 export async function editMessageText(
   chatId: number,
@@ -125,18 +127,24 @@ export async function answerCallbackQuery(
 }
 
 export default {
-  async fetch(request: Request, env: CloudflareEnv): Promise<Response> {
+  async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "POST") {
       try {
-        const update = (await request.json()) as TelegramUpdate;
-        await handleMessage(update, env);
+        const update = (await request.json()) as any;
+        ctx.waitUntil(handleMessage(update, env));
+        return new Response("OK", { status: 200 });
       } catch (err) {
-        console.error("Router intake error:", err);
+        console.error("Webhook processing error:", err);
+        return new Response("Error", { status: 500 });
       }
-      return new Response("OK", { status: 200 });
     }
-    return new Response("🚀 Supreme Engine is ONLINE!", { status: 200 });
+    return new Response("Aloo Bot Worker Active", { status: 200 });
+  },
+
+  async scheduled(event: ScheduledEvent, env: CloudflareEnv, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(BROADCAST_ENGINE.processBatch(env.DB, 50));
   },
 };
+
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END

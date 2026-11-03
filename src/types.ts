@@ -40,6 +40,12 @@ export interface TelegramMessage {
   caption?: string;
   photo?: TelegramPhotoSize[];
   video?: TelegramVideo;
+  document?: any;
+  audio?: any;
+  voice?: any;
+  sticker?: any;
+  animation?: any;
+  poll?: any;
   reply_to_message?: TelegramMessage;
   new_chat_members?: TelegramUser[];
 }
