@@ -356,31 +356,36 @@ export async function handleBroadcastCallback(env: CloudflareEnv, cq: any): Prom
 export async function handleBroadcastMessageInput(ctx: BotContext): Promise<boolean> {
   if (!isOwner(ctx.userId)) return false;
 
-  const wiz = await ctx.env.DB.prepare(
-    "SELECT step, session_data FROM broadcast_wizards WHERE owner_id = ?"
-  ).bind(ctx.userId).first<{ step: string; session_data: string }>();
+  try {
+    const wiz = await ctx.env.DB.prepare(
+      "SELECT step, session_data FROM broadcast_wizards WHERE owner_id = ?"
+    ).bind(ctx.userId).first<{ step: string; session_data: string }>();
 
-  if (!wiz || wiz.step !== "AWAIT_CONTENT") return false;
+    if (!wiz || wiz.step !== "AWAIT_CONTENT") return false;
 
-  const draft: BroadcastDraft = JSON.parse(wiz.session_data);
-  const msg = ctx.message;
+    const draft: BroadcastDraft = JSON.parse(wiz.session_data);
+    const msg = ctx.message;
 
-  // Extract content item representation
-  draft.items = [{
-    message_id: msg.message_id,
-    from_chat_id: msg.chat.id,
-    type: msg.photo ? "photo" : msg.video ? "video" : msg.document ? "document" : msg.audio ? "audio" : "text",
-    text: msg.text,
-    caption: msg.caption,
-  }];
+    draft.items = [{
+      message_id: msg.message_id,
+      from_chat_id: msg.chat.id,
+      type: msg.photo ? "photo" : msg.video ? "video" : msg.document ? "document" : msg.audio ? "audio" : "text",
+      text: msg.text,
+      caption: msg.caption,
+    }];
 
-  await ctx.env.DB.prepare(
-    "UPDATE broadcast_wizards SET step = 'OPTIONS', session_data = ? WHERE owner_id = ?"
-  ).bind(JSON.stringify(draft), ctx.userId).run();
+    await ctx.env.DB.prepare(
+      "UPDATE broadcast_wizards SET step = 'OPTIONS', session_data = ? WHERE owner_id = ?"
+    ).bind(JSON.stringify(draft), ctx.userId).run();
 
-  await renderOptionsStep(ctx.env.DB, ctx.chatId, draft);
-  return true;
+    await renderOptionsStep(ctx.env.DB, ctx.chatId, draft);
+    return true;
+  } catch (err) {
+    console.error("Non-fatal broadcast message input error:", err);
+    return false;
+  }
 }
+
 
 async function renderOptionsStep(db: D1Database, chatId: number, draft: BroadcastDraft, messageId?: number): Promise<void> {
   const pinDisplay = draft.pinMode === "none" ? "OFF" : draft.pinMode === "quiet" ? "QUIET" : "LOUD";
