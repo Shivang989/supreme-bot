@@ -12,7 +12,7 @@ interface JobRow {
 }
 
 export const BROADCAST_ENGINE = {
-  // Snapshot audience list into database tables at campaign launch
+  // 1. Snapshot target recipients into jobs table
   async snapshotAudience(
     db: D1Database,
     campaignId: string,
@@ -40,34 +40,32 @@ export const BROADCAST_ENGINE = {
       );
     }
 
-    // Execute in chunks to respect Cloudflare D1 batch limits
     for (let i = 0; i < statements.length; i += 50) {
       await db.batch(statements.slice(i, i + 50));
     }
   },
 
-  // Continuously process jobs in worker background until the queue is drained or runtime limit is reached
+  // 2. Run continuous delivery loop within Cloudflare Worker execution window
   async runContinuousWorker(db: D1Database, maxRunTimeMs: number = 25000): Promise<void> {
     const start = Date.now();
     while (Date.now() - start < maxRunTimeMs) {
-      const { processed, remaining } = await this.processBatch(db, 20);
+      const { processed, remaining } = await this.processBatch(db, 25);
       if (processed === 0 || remaining === 0) {
         break;
       }
-      // Pacing delay to avoid exceeding Telegram's global 30 msg/sec limit
       await new Promise((resolve) => setTimeout(resolve, 40));
     }
   },
 
-  // Process a single batch of delivery jobs with lease claiming and error recovery
+  // 3. Process a single batch of queued broadcast jobs
   async processBatch(
     db: D1Database,
-    batchSize: number = 20
+    batchSize: number = 25
   ): Promise<{ processed: number; remaining: number }> {
     const now = Math.floor(Date.now() / 1000);
-    const leaseTime = now + 45; // 45-second lock lease
+    const leaseTime = now + 45;
 
-    // 1. Reclaim expired worker leases & activate ready retries
+    // Release expired leases & due retries
     await db
       .prepare(
         `UPDATE broadcast_jobs 
@@ -86,7 +84,7 @@ export const BROADCAST_ENGINE = {
       .bind(now)
       .run();
 
-    // 2. Fetch active pending jobs
+    // Claim pending jobs for running campaigns
     const jobs = await db
       .prepare(
         `SELECT j.* 
@@ -103,7 +101,6 @@ export const BROADCAST_ENGINE = {
       return { processed: 0, remaining: 0 };
     }
 
-    // 3. Atomically lock selected jobs with a lease
     const jobIds = jobs.results.map((j) => j.id);
     const placeholders = jobIds.map(() => "?").join(",");
     await db
@@ -117,7 +114,6 @@ export const BROADCAST_ENGINE = {
 
     const campaignMap = new Map<string, any>();
 
-    // 4. Deliver messages
     for (const job of jobs.results) {
       if (!campaignMap.has(job.campaign_id)) {
         const camp = await db
@@ -147,9 +143,10 @@ export const BROADCAST_ENGINE = {
         continue;
       }
 
+      // Send message (Copy or Forward, with fallback to Forward if Poll cannot be copied)
       let sendRes: any;
       try {
-        if (campaign.mode === "forward") {
+        if (campaign.mode === "forward" || currentItem.type === "poll") {
           sendRes = await BROADCAST_API.forwardMessage({
             chat_id: job.destination_id,
             from_chat_id: currentItem.from_chat_id,
@@ -163,31 +160,33 @@ export const BROADCAST_ENGINE = {
             from_chat_id: currentItem.from_chat_id,
             message_id: currentItem.message_id,
             reply_markup:
-              job.item_index === items.length - 1 && buttons
+              job.item_index === items.length - 1 && buttons && buttons.length > 0
                 ? { inline_keyboard: buttons }
                 : undefined,
             disable_notification: campaign.is_silent === 1,
             protect_content: campaign.protect_content === 1,
           });
+
+          // Fallback to forwardMessage if Telegram blocks copying (e.g. certain polls/games)
+          if (!sendRes.ok && sendRes.description?.includes("can't be copied")) {
+            sendRes = await BROADCAST_API.forwardMessage({
+              chat_id: job.destination_id,
+              from_chat_id: currentItem.from_chat_id,
+              message_id: currentItem.message_id,
+              disable_notification: campaign.is_silent === 1,
+              protect_content: campaign.protect_content === 1,
+            });
+          }
         }
       } catch (err: any) {
-        sendRes = { ok: false, description: err?.message || "Network exception during dispatch" };
+        sendRes = { ok: false, description: err?.message || "Network error" };
       }
 
-      // Handle Telegram response
       if (sendRes.ok && sendRes.result) {
         const sentId = sendRes.result.message_id;
 
-        // Message pinning logic
-        if (
-          campaign.pin_mode !== "none" &&
-          job.item_index === campaign.pin_item_index &&
-          (campaign.pin_destination === "all" ||
-            (campaign.pin_destination === "groups" &&
-              ["group", "supergroup"].includes(job.destination_type)) ||
-            (campaign.pin_destination === "channels" && job.destination_type === "channel") ||
-            (campaign.pin_destination === "private" && job.destination_type === "private"))
-        ) {
+        // Pin message if enabled
+        if (campaign.pin_mode !== "none" && job.item_index === campaign.pin_item_index) {
           try {
             await BROADCAST_API.pinChatMessage({
               chat_id: job.destination_id,
@@ -195,11 +194,11 @@ export const BROADCAST_ENGINE = {
               disable_notification: campaign.pin_mode === "quiet",
             });
           } catch {
-            // Pin failure does not invalidate delivery
+            // Ignore pin permission errors so broadcast still counts as sent
           }
         }
 
-        // Multi-message sequence progression
+        // Advance sequence or mark sent
         if (job.item_index < items.length - 1) {
           const nextIndex = job.item_index + 1;
           await db
@@ -211,7 +210,6 @@ export const BROADCAST_ENGINE = {
             .bind(nextIndex, sentId, now, job.id)
             .run();
         } else {
-          // Destination fully completed
           await db
             .prepare(
               `UPDATE broadcast_jobs 
@@ -221,11 +219,8 @@ export const BROADCAST_ENGINE = {
             .bind(sentId, now, job.id)
             .run();
 
-          // Group member tagging if enabled
-          if (
-            campaign.tag_all_enabled === 1 &&
-            ["group", "supergroup"].includes(job.destination_type)
-          ) {
+          // Tag All in groups if enabled by owner
+          if (campaign.tag_all_enabled === 1 && job.destination_id < 0) {
             await this.dispatchGroupMentions(db, job.destination_id);
           }
         }
@@ -234,12 +229,12 @@ export const BROADCAST_ENGINE = {
         const retryAfterSec = sendRes.parameters?.retry_after;
         const migrateId = sendRes.parameters?.migrate_to_chat_id;
 
-        // Auto-migrate groups upgraded to supergroups
+        // Handle group upgraded to supergroup automatically
         if (migrateId) {
           await db
             .prepare(
-              `UPDATE broadcast_chat_registry 
-               SET chat_id = ?, chat_type = 'supergroup', updated_at = ? 
+              `UPDATE OR IGNORE broadcast_chat_registry 
+               SET chat_id = ?, chat_type = 'supergroup', can_send = 1, updated_at = ? 
                WHERE chat_id = ?`
             )
             .bind(migrateId, now, job.destination_id)
@@ -269,16 +264,19 @@ export const BROADCAST_ENGINE = {
           continue;
         }
 
-        // Permanent failures (block, kick, permission lack, deleted user)
-        const isPermanent =
+        // Check if bot was permanently blocked or kicked
+        const isKickedOrBlocked =
           desc.includes("bot was blocked") ||
           desc.includes("user is deactivated") ||
           desc.includes("chat not found") ||
           desc.includes("bot was kicked") ||
-          desc.includes("can't initiate conversation") ||
-          desc.includes("not enough rights");
+          desc.includes("bot is not a member") ||
+          desc.includes("group chat was deactivated") ||
+          desc.includes("can't initiate conversation");
 
-        if (isPermanent) {
+        const isMediaRestricted = desc.includes("not enough rights");
+
+        if (isKickedOrBlocked || isMediaRestricted) {
           await db
             .prepare(
               `UPDATE broadcast_jobs 
@@ -288,19 +286,26 @@ export const BROADCAST_ENGINE = {
             .bind(desc, now, job.id)
             .run();
 
-          if (job.destination_type === "private") {
-            await db
-              .prepare("UPDATE broadcast_user_registry SET is_blocked = 1 WHERE user_id = ?")
-              .bind(job.destination_id)
-              .run();
-          } else {
-            await db
-              .prepare("UPDATE broadcast_chat_registry SET can_send = 0 WHERE chat_id = ?")
-              .bind(job.destination_id)
-              .run();
+          // Only disable future broadcasts if the bot was actually kicked/blocked (NOT if just a sticker/poll was restricted)
+          if (isKickedOrBlocked) {
+            if (job.destination_id > 0) {
+              await db
+                .prepare("UPDATE broadcast_user_registry SET is_blocked = 1 WHERE user_id = ?")
+                .bind(job.destination_id)
+                .run();
+              await db
+                .prepare("UPDATE broadcast_chat_registry SET can_send = 0 WHERE chat_id = ?")
+                .bind(job.destination_id)
+                .run();
+            } else {
+              await db
+                .prepare("UPDATE broadcast_chat_registry SET can_send = 0 WHERE chat_id = ?")
+                .bind(job.destination_id)
+                .run();
+            }
           }
         } else {
-          // Temporary failure: exponential backoff up to 3 attempts
+          // Temporary failure: retry up to 3 times
           if (job.attempts >= 3) {
             await db
               .prepare(
@@ -324,15 +329,14 @@ export const BROADCAST_ENGINE = {
         }
       }
 
-      // Safe pacing pause between requests
       await new Promise((resolve) => setTimeout(resolve, 35));
     }
 
-    // 5. Finalize completed campaigns
+    // Mark finished campaigns as completed
     for (const [cId] of campaignMap.entries()) {
       const remainingCount = await db
         .prepare(
-          `SELECT COUNT(*) as c 
+          `SELECT COUNT(*) AS c 
            FROM broadcast_jobs 
            WHERE campaign_id = ? AND status IN ('pending', 'processing', 'retry_wait')`
         )
@@ -353,7 +357,7 @@ export const BROADCAST_ENGINE = {
 
     const totalRemaining = await db
       .prepare(
-        `SELECT COUNT(*) as c 
+        `SELECT COUNT(*) AS c 
          FROM broadcast_jobs 
          WHERE status IN ('pending', 'processing', 'retry_wait')`
       )
@@ -362,45 +366,45 @@ export const BROADCAST_ENGINE = {
     return { processed: jobs.results.length, remaining: totalRemaining?.c || 0 };
   },
 
-  // Tag observed members in groups where Tag All is authorized
+  // 4. Mention known group members in chunks of 5
   async dispatchGroupMentions(db: D1Database, chatId: number): Promise<void> {
-    const chatSettings = await db
-      .prepare("SELECT allow_tag_all FROM broadcast_chat_registry WHERE chat_id = ?")
-      .bind(chatId)
-      .first<{ allow_tag_all: number }>();
+    try {
+      const members = await db
+        .prepare(
+          `SELECT user_id, first_name 
+           FROM broadcast_group_members 
+           WHERE chat_id = ? 
+           ORDER BY last_seen DESC 
+           LIMIT 50`
+        )
+        .bind(chatId)
+        .all<{ user_id: number; first_name: string }>();
 
-    if (!chatSettings || chatSettings.allow_tag_all !== 1) return;
+      if (!members.results || members.results.length === 0) return;
 
-    const members = await db
-      .prepare(
-        `SELECT user_id, first_name 
-         FROM broadcast_group_members 
-         WHERE chat_id = ? 
-         ORDER BY last_seen DESC 
-         LIMIT 50`
-      )
-      .bind(chatId)
-      .all<{ user_id: number; first_name: string }>();
-
-    if (!members.results || members.results.length === 0) return;
-
-    for (let i = 0; i < members.results.length; i += 5) {
-      const chunk = members.results.slice(i, i + 5);
-      const text =
-        "📢 <b>Notice to Members:</b> " +
-        chunk
-          .map((m) => `<a href="tg://user?id=${m.user_id}">${m.first_name.replace(/</g, "&lt;")}</a>`)
+      for (let i = 0; i < members.results.length; i += 5) {
+        const chunk = members.results.slice(i, i + 5);
+        const mentions = chunk
+          .map((m) => {
+            const safeName = (m.first_name || "Member")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            return `<a href="tg://user?id=${m.user_id}">${safeName}</a>`;
+          })
           .join(" ");
 
-      await BROADCAST_API.sendTextMessage({
-        chat_id: chatId,
-        text,
-        parse_mode: "HTML",
-        disable_notification: false,
-      });
+        await BROADCAST_API.sendTextMessage({
+          chat_id: chatId,
+          text: `📢 ${mentions}`,
+          parse_mode: "HTML",
+          disable_notification: false,
+        });
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+    } catch (err) {
+      console.error("Non-fatal Tag All error:", err);
     }
   },
 };
-
