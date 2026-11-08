@@ -3,16 +3,12 @@ import { CONFIG } from "../config";
 import { FORCE_SUB_API } from "../telegram/forceSubApi";
 import { sendMessage } from "../index";
 
-// Short-term in-memory cache to prevent spamming getChatMember on every message (key: `${groupId}:${userId}`, value: timestamp)
 const VERIFIED_CACHE = new Map<string, number>();
 
 export function isOwner(userId: number | string): boolean {
   return String(userId).trim() === String(CONFIG.OWNER_ID).trim();
 }
 
-/**
- * Type-safe authorization check for Bot Owner or Group Moderator
- */
 export async function isUserAuthorized(
   db: D1Database,
   chatId: number | string,
@@ -61,24 +57,28 @@ function parseAddArguments(rawText: string): { buttonName: string; link: string;
 function resolveTargetChat(link: string, explicitTarget?: string): { targetChat: string; isPrivateLink: boolean } {
   if (explicitTarget) {
     let clean = explicitTarget.trim();
-
-    // Auto-fix numerical IDs: if missing -100 prefix, prepend it automatically
     if (/^-?\d+$/.test(clean)) {
       const rawDigits = clean.replace(/^-/, "");
       if (!clean.startsWith("-100")) {
         clean = `-100${rawDigits}`;
       }
     } else if (!clean.startsWith("@")) {
-      clean = `@${clean}`; }  return { targetChat: clean, isPrivateLink: false }; }  const isPrivate = link.includes("/+") \vert{}\vert{} link.includes("/joinchat/"); const match = link.match(/(?:t\.me\/\vert{}telegram\.me\/\vert{}@)([a-zA-Z0-9_]+)/i);  if (match && !isPrivate) { return { targetChat: `@${match[1]}`, isPrivateLink: false };
+      clean = `@${clean}`;
+    }
+    return { targetChat: clean, isPrivateLink: false };
+  }
+
+  const isPrivate = link.includes("/+") || link.includes("/joinchat/");
+  const match = link.match(/(?:t\.me\/|telegram\.me\/|@)([a-zA-Z0-9_]+)/i);
+
+  if (match && !isPrivate) {
+    return { targetChat: `@${match[1]}`, isPrivateLink: false };
   }
 
   return { targetChat: link, isPrivateLink: isPrivate };
 }
 
 export const forceSubHandlers: Record<string, CommandHandler> = {
-  // ==========================================
-  // ➕ /add <button name> <link> [channel_id]
-  // ==========================================
   "/add": async (ctx: BotContext) => {
     try {
       if (ctx.chatId > 0) {
@@ -117,7 +117,7 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
           ctx.chatId,
           "⚠️ <b>Private invite link detected!</b>\n\n" +
             "Please include the numerical <b>Channel ID</b> at the end of the command:\n\n" +
-            `<code>/add ${buttonName}${link} -100xxxxxxxxxx</code>`,
+            `<code>/add ${buttonName} ${link} -100xxxxxxxxxx</code>`,
           undefined,
           ctx.message.message_id
         );
@@ -128,7 +128,8 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
       if (!chatCheck.ok) {
         await sendMessage(
           ctx.chatId,
-          `❌ <b>Cannot access target chat:</b> <code>${targetChat}</code>\n` + `<i>Reason: ${chatCheck.error}</i>\n\n` +
+          `❌ <b>Cannot access target chat:</b> <code>${targetChat}</code>\n` +
+            `<i>Reason: ${chatCheck.error}</i>\n\n` +
             `👉 Make sure Aloo is an <b>Administrator</b> in that channel/group with member management permissions.`,
           undefined,
           ctx.message.message_id
@@ -156,7 +157,8 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
       await sendMessage(
         ctx.chatId,
         `✅ <b>Force Join Configured!</b>\n\n` +
-          `• <b>Button:</b> ${buttonName}\n` + `• <b>Link:</b> ${link}\n` +
+          `• <b>Button:</b> ${buttonName}\n` +
+          `• <b>Link:</b> ${link}\n` +
           `• <b>Target Chat:</b> <code>${targetChat}</code> (${chatCheck.title || "Verified"})\n\n` +
           `<i>Users must join or request to join before chatting here.</i>`,
         undefined,
@@ -164,7 +166,36 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
       );
     } catch (err: any) {
       console.error("Error in /add command:", err);
-      await sendMessage(ctx.chatId, `⚠️ <b>Error:</b> <code>${err?.message \vert{}\vert{} "Execution error"}</code>`); } },  // ========================================== // 🛡 /approved (Reply to user OR /approved <user_id>) // ========================================== "/approved": async (ctx: BotContext) => { try { if (!isOwner(ctx.userId)) { await sendMessage(ctx.chatId, "⛔ Only the bot owner can approve moderators.", undefined, ctx.message.message_id); return; }  if (ctx.chatId > 0) { await sendMessage(ctx.chatId, "⚠️ This command can only be used inside groups.", undefined, ctx.message.message_id); return; }  let targetUserId: number \vert{} null = null; let targetUserName = "User";  const replyMsg = ctx.message.reply_to_message; if (replyMsg && replyMsg.from) { if (replyMsg.from.is_bot) { await sendMessage(ctx.chatId, "⚠️ Bots cannot be authorized.", undefined, ctx.message.message_id); return; } targetUserId = replyMsg.from.id; targetUserName = replyMsg.from.first_name \vert{}\vert{} "User"; } else if (ctx.args.length > 0 && /^\d+$/.test(ctx.args[0])) { targetUserId = Number(ctx.args[0]); targetUserName = `User (${targetUserId})`;
+      await sendMessage(ctx.chatId, `⚠️ <b>Error:</b> <code>${err?.message || "Execution error"}</code>`);
+    }
+  },
+
+  "/approved": async (ctx: BotContext) => {
+    try {
+      if (!isOwner(ctx.userId)) {
+        await sendMessage(ctx.chatId, "⛔ Only the bot owner can approve moderators.", undefined, ctx.message.message_id);
+        return;
+      }
+
+      if (ctx.chatId > 0) {
+        await sendMessage(ctx.chatId, "⚠️ This command can only be used inside groups.", undefined, ctx.message.message_id);
+        return;
+      }
+
+      let targetUserId: number | null = null;
+      let targetUserName = "User";
+
+      const replyMsg = ctx.message.reply_to_message;
+      if (replyMsg && replyMsg.from) {
+        if (replyMsg.from.is_bot) {
+          await sendMessage(ctx.chatId, "⚠️ Bots cannot be authorized.", undefined, ctx.message.message_id);
+          return;
+        }
+        targetUserId = replyMsg.from.id;
+        targetUserName = replyMsg.from.first_name || "User";
+      } else if (ctx.args.length > 0 && /^\d+$/.test(ctx.args[0])) {
+        targetUserId = Number(ctx.args[0]);
+        targetUserName = `User (${targetUserId})`;
       } else {
         await sendMessage(
           ctx.chatId,
@@ -204,9 +235,6 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
     }
   },
 
-  // ==========================================
-  // 🗑 /empty (Reset)
-  // ==========================================
   "/empty": async (ctx: BotContext) => {
     try {
       if (ctx.chatId > 0) return;
@@ -220,23 +248,29 @@ export const forceSubHandlers: Record<string, CommandHandler> = {
       await ctx.env.DB.prepare("DELETE FROM force_sub WHERE group_id = ?").bind(ctx.chatId).run();
 
       for (const key of VERIFIED_CACHE.keys()) {
-        if (key.startsWith(`${ctx.chatId}:`)) VERIFIED_CACHE.delete(key); }  await sendMessage( ctx.chatId, "🗑 <b>Force Join Cleared!</b>\nAll buttons removed. Members can now chat freely.", undefined, ctx.message.message_id ); } catch (err: any) { console.error("Error in /empty command:", err); await sendMessage(ctx.chatId, `⚠️ <b>Error:</b> <code>${err?.message || "Execution error"}</code>`);
+        if (key.startsWith(`${ctx.chatId}:`)) VERIFIED_CACHE.delete(key);
+      }
+
+      await sendMessage(
+        ctx.chatId,
+        "🗑 <b>Force Join Cleared!</b>\nAll buttons removed. Members can now chat freely.",
+        undefined,
+        ctx.message.message_id
+      );
+    } catch (err: any) {
+      console.error("Error in /empty command:", err);
+      await sendMessage(ctx.chatId, `⚠️ <b>Error:</b> <code>${err?.message || "Execution error"}</code>`);
     }
   },
 };
 
-// ==========================================
-// 🔍 Incoming Message Verification Interceptor
-// ==========================================
 export async function handleForceSubCheck(ctx: BotContext): Promise<boolean> {
   if (ctx.chatId > 0) return false;
 
-  // Bot owner, bots, and anonymous channel admins are exempt
   if (isOwner(ctx.userId) || ctx.message.from?.is_bot || (ctx.message as any).sender_chat) {
     return false;
   }
 
-  // Approved moderators for this group are exempt
   const isAuthorized = await isUserAuthorized(ctx.env.DB, ctx.chatId, ctx.userId);
   if (isAuthorized) {
     return false;
@@ -251,7 +285,6 @@ export async function handleForceSubCheck(ctx: BotContext): Promise<boolean> {
 
     if (!rule) return false;
 
-    // 1. Check in-memory verification cache (valid for 60 seconds)
     const cacheKey = `${ctx.chatId}:${ctx.userId}`;
     const cachedTime = VERIFIED_CACHE.get(cacheKey);
     const now = Date.now();
@@ -259,8 +292,92 @@ export async function handleForceSubCheck(ctx: BotContext): Promise<boolean> {
       return false;
     }
 
-    // 2. Check join request tracking
     const cleanTarget = rule.target_chat.trim();
     const hasRequested = await ctx.env.DB.prepare(
       `SELECT 1 FROM force_sub_requests
-       WHERE user_id = ? AND (target_chat
+       WHERE user_id = ? AND (target_chat = ? OR target_chat = ? OR target_chat = ?)`
+    )
+      .bind(
+        ctx.userId,
+        cleanTarget,
+        cleanTarget.toLowerCase(),
+        cleanTarget.replace("@", "")
+      )
+      .first();
+
+    if (hasRequested) {
+      VERIFIED_CACHE.set(cacheKey, now);
+      return false;
+    }
+
+    const check = await FORCE_SUB_API.getChatMember(cleanTarget, ctx.userId);
+
+    if (check.ok) {
+      if (check.isMember) {
+        VERIFIED_CACHE.set(cacheKey, now);
+        return false;
+      }
+
+      if (check.status === "left" || check.status === "kicked") {
+        VERIFIED_CACHE.delete(cacheKey);
+        await ctx.env.DB.prepare(
+          "DELETE FROM force_sub_requests WHERE user_id = ? AND (target_chat = ? OR target_chat = ?)"
+        )
+          .bind(ctx.userId, cleanTarget, cleanTarget.toLowerCase())
+          .run();
+      }
+    } else {
+      console.error(`ForceSub check API error on '${cleanTarget}':`, check.error);
+      return false;
+    }
+
+    await FORCE_SUB_API.deleteMessage(ctx.chatId, ctx.message.message_id);
+
+    const name = ctx.message.from?.first_name || "User";
+    const text =
+      `⚠️ <b>Hey <a href="tg://user?id=${ctx.userId}">${name}</a>!</b>\n\n` +
+      `You must join our channel/group or send a join request before you can chat here.`;
+
+    const kb = {
+      inline_keyboard: [[{ text: rule.button_name, url: rule.link }]],
+    };
+
+    await sendMessage(ctx.chatId, text, kb);
+    return true;
+  } catch (err) {
+    console.error("Non-fatal handleForceSubCheck error:", err);
+    return false;
+  }
+}
+
+export async function handleJoinRequest(update: TelegramUpdate, db: D1Database): Promise<void> {
+  const req = (update as any).chat_join_request;
+  if (!req || !req.from || !req.chat) return;
+
+  const userId = req.from.id;
+  const chatIdStr = String(req.chat.id);
+  const usernameStr = req.chat.username ? `@${req.chat.username.toLowerCase()}` : null;
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO force_sub_requests (user_id, target_chat, created_at)
+         VALUES (?, ?, ?)`
+      )
+      .bind(userId, chatIdStr, now)
+      .run();
+
+    if (usernameStr) {
+      await db
+        .prepare(
+          `INSERT OR IGNORE INTO force_sub_requests (user_id, target_chat, created_at)
+           VALUES (?, ?, ?)`
+        )
+        .bind(userId, usernameStr, now)
+        .run();
+    }
+  } catch (err) {
+    console.error("Non-fatal join request tracking error:", err);
+  }
+}
