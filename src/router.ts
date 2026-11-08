@@ -17,6 +17,7 @@ import {
   handleBroadcastCallback,
   handleBroadcastMessageInput,
 } from "./modules/broadcastWizard";
+import { forceSubHandlers, handleForceSubCheck, handleJoinRequest } from "./modules/forceSub";
 import { BROADCAST_REGISTRY } from "./modules/broadcastRegistry";
 import { BROADCAST_ENGINE } from "./modules/broadcastEngine";
 import { answerCallbackQuery } from "./index";
@@ -30,21 +31,27 @@ const commandRegistry: Record<string, CommandHandler> = {
   ...entertainmentHandlers,
   ...dmuiHandlers,
   ...broadcastHandlers,
+  ...forceSubHandlers, // Registers /add, /approved, /empty
 };
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
-  // 1. Handle bot membership updates (promotions, kicks, channel additions)
+  // 1. Handle bot membership updates (promotions, kicks)
   if ((update as any).my_chat_member) {
     await BROADCAST_REGISTRY.handleChatMemberUpdated(env.DB, update);
     return;
   }
 
-  // 2. Handle Inline Button Callbacks
+  // 2. Track Join Requests for Force Join verification
+  if ((update as any).chat_join_request) {
+    await handleJoinRequest(update, env.DB);
+    return;
+  }
+
+  // 3. Handle Inline Button Callbacks
   if (update.callback_query) {
     const cq = update.callback_query;
     const data: string = cq.data || "";
 
-    // Execute bot commands triggered by custom buttons
     if (data.startsWith("dm_cmd:")) {
       const cmd = data.replace("dm_cmd:", "");
       const handler = commandRegistry[cmd];
@@ -65,30 +72,8 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
       return;
     }
 
-    // Check Broadcast Wizard callbacks
     if (await handleBroadcastCallback(env, cq)) return;
-
-    // Check DMUI callbacks
     if (await handleDMUICallback(env, cq)) return;
-  }
-
-  // 3. Handle Chat Member Updates (Supergroup direct additions)
-  if (update.chat_member) {
-    const cm = update.chat_member;
-    const oldStatus = cm.old_chat_member?.status;
-    const newStatus = cm.new_chat_member?.status;
-
-    if (
-      (newStatus === "member" || newStatus === "administrator") &&
-      oldStatus !== "member" &&
-      oldStatus !== "administrator"
-    ) {
-      const user = cm.new_chat_member?.user;
-      if (user && !user.is_bot) {
-        await handleWelcome(env, { chat: cm.chat } as any, [user]);
-      }
-    }
-    return;
   }
 
   const message = update.message;
@@ -97,7 +82,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   const chatId = message.chat.id;
   const userId = message.from.id;
 
-  // Track chat and user destinations in the broadcast registry
+  // Track chat and user destinations for broadcasts
   await BROADCAST_REGISTRY.trackDestination(env.DB, message.chat);
   if (message.chat.type === "private") {
     await BROADCAST_REGISTRY.trackUser(env.DB, message.from);
@@ -107,7 +92,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
 
   await DB_MANAGER.ensureUserExists(env.DB, userId);
 
-  // 4. Handle Service Message joins and member additions
+  // Group welcome handler
   const newMembers =
     message.new_chat_members ||
     ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
@@ -116,7 +101,6 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     return;
   }
 
-  // Construct standard BotContext
   const ctx: BotContext = {
     env,
     update,
@@ -129,7 +113,18 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     reply: message.reply_to_message,
   };
 
-  // 5. Intercept Owner inputs for wizards (Broadcast & DMUI)
+  // 4. Force-Join Interceptor: Deletes message if user hasn't joined or requested
+  // Allow /approved, /add, /empty commands to pass through to authorized users
+  const isSetupCommand =
+    ctx.text.startsWith("/add") ||
+    ctx.text.startsWith("/approved") ||
+    ctx.text.startsWith("/empty");
+
+  if (!isSetupCommand) {
+    if (await handleForceSubCheck(ctx)) return;
+  }
+
+  // Intercept owner inputs for wizards
   if (await handleBroadcastMessageInput(ctx)) return;
 
   if (message.photo || message.video) {
@@ -141,7 +136,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
 
   if (await handleDMUITextInput(ctx)) return;
 
-  // 6. Standard Command Execution
+  // 5. Standard Command Execution
   if (rawText.startsWith("/")) {
     const parts = rawText.split(/\s+/);
     const command = parts[0].toLowerCase().split("@")[0];
@@ -160,7 +155,6 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     }
   }
 
-  // 7. Advance active broadcast queues in background
-  // Advance active broadcast queues continuously
+  // Advance active broadcast queues continuously in background
   await BROADCAST_ENGINE.runContinuousWorker(env.DB, 8000);
 }
