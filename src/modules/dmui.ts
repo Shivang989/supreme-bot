@@ -32,8 +32,8 @@ async function sendAnimation(
   return await res.json();
 }
 
-export function isOwner(userId: number): boolean {
-  return userId === Number(CONFIG.OWNER_ID);
+export function isOwner(userId: number | string): boolean {
+  return String(userId).trim() === String(CONFIG.OWNER_ID).trim();
 }
 
 // Default buttons if none are configured yet
@@ -158,6 +158,9 @@ export const dmuiHandlers: Record<string, CommandHandler> = {
           { text: "🔘 Buttons", callback_data: "dmui:ask_buttons" },
           { text: "🖼 Media", callback_data: "dmui:ask_media" },
         ],
+        [
+          { text: "👁 Live Preview", callback_data: "dmui:preview" },
+        ],
       ],
     };
 
@@ -212,6 +215,9 @@ export async function handleDMUICallback(env: CloudflareEnv, cq: any): Promise<b
             { text: "🔘 Buttons", callback_data: "dmui:ask_buttons" },
             { text: "🖼 Media", callback_data: "dmui:ask_media" },
           ],
+          [
+            { text: "👁 Live Preview", callback_data: "dmui:preview" },
+          ],
         ],
       }
     );
@@ -240,7 +246,7 @@ export async function handleDMUICallback(env: CloudflareEnv, cq: any): Promise<b
     return true;
   }
 
-  // 2. Buttons Prompt (Group Help Style)
+  // 2. Buttons Prompt
   if (action === "ask_buttons") {
     await DB_MANAGER.setSetting(env.DB, DMUI_STATE_KEY, "AWAIT_BUTTONS");
     await answerCallbackQuery(cq.id);
@@ -276,13 +282,13 @@ export async function handleDMUICallback(env: CloudflareEnv, cq: any): Promise<b
 
     const config = (await DB_MANAGER.getSetting<DMUIConfig>(env.DB, DMUI_CONFIG_KEY)) || {};
     const status = config.mediaType && config.mediaType !== "none"
-      ? `Active Media: <b>${config.mediaType.toUpperCase()}</b>`
+      ? `Active Media: <b>${config.mediaType === "animation" ? "GIF ANIMATION" : config.mediaType.toUpperCase()}</b>`
       : "Active Media: <b>None (Text-only)</b>";
 
     const prompt =
       `🖼 <b>SET DM "/start" MEDIA</b>\n\n` +
       `${status}\n\n` +
-      `• Send any <b>Photo</b> or <b>Video</b> directly in this chat to attach it.\n` +
+      `• Send any <b>Photo</b>, <b>Video</b>, or <b>GIF</b> directly in this chat to attach it.\n` +
       `• Send <code>/empty</code> or click below to remove media and use text-only.`;
 
     await editMessageText(chatId, messageId, prompt, {
@@ -294,6 +300,7 @@ export async function handleDMUICallback(env: CloudflareEnv, cq: any): Promise<b
     return true;
   }
 
+  // 4. Clear Media
   if (action === "clear_media") {
     const config = (await DB_MANAGER.getSetting<DMUIConfig>(env.DB, DMUI_CONFIG_KEY)) || {};
     config.mediaType = "none";
@@ -304,6 +311,37 @@ export async function handleDMUICallback(env: CloudflareEnv, cq: any): Promise<b
     await answerCallbackQuery(cq.id, "Media removed.");
     await editMessageText(chatId, messageId, "✅ <b>Media Cleared:</b> /start is now text-only.", {
       inline_keyboard: [[{ text: "🔙 Main Menu", callback_data: "dmui:root" }]],
+    });
+    return true;
+  }
+
+  // 5. Live Preview
+  if (action === "preview") {
+    await answerCallbackQuery(cq.id);
+    const config = (await DB_MANAGER.getSetting<DMUIConfig>(env.DB, DMUI_CONFIG_KEY)) || {};
+    const template = config.customText || "Hey, 💕 {first_name}!";
+    const text = renderCustomTemplate(template, {
+      id: userId,
+      first_name: cq.from?.first_name || "Owner",
+      balance: 1000,
+      kills: 5,
+    });
+    const kb = compileInlineKeyboard(config.buttonRows || getDefaultButtons());
+
+    if (config.mediaFileId && config.mediaType && config.mediaType !== "none") {
+      if (config.mediaType === "animation") {
+        await sendAnimation(chatId, config.mediaFileId, text, kb);
+      } else if (config.mediaType === "video") {
+        await sendVideo(chatId, config.mediaFileId, text, kb);
+      } else if (config.mediaType === "photo") {
+        await sendPhoto(chatId, config.mediaFileId, text, kb);
+      }
+    } else {
+      await sendMessage(chatId, text, kb);
+    }
+
+    await sendMessage(chatId, "👆 <b>DMUI Live Preview</b>", {
+      inline_keyboard: [[{ text: "🔙 Return to /dmui", callback_data: "dmui:root" }]],
     });
     return true;
   }
@@ -402,18 +440,13 @@ export async function handleDMUITextInput(ctx: BotContext): Promise<boolean> {
   return false;
 }
 
-// Handle Incoming Photos/Videos for Media Attachment
+// Handle Incoming Photos/Videos/GIFs for Media Attachment
 export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
-  if (ctx.userId !== Number(CONFIG.OWNER_ID)) return false;
+  if (!isOwner(ctx.userId)) return false;
 
   try {
-    const session = await ctx.env.DB.prepare(
-      "SELECT step FROM dmui_config WHERE owner_id = ?"
-    )
-      .bind(ctx.userId)
-      .first<{ step: string }>();
-
-    if (!session || session.step !== "AWAIT_MEDIA") return false;
+    const state = await DB_MANAGER.getSetting<string>(ctx.env.DB, DMUI_STATE_KEY);
+    if (state !== "AWAIT_MEDIA") return false;
 
     const msg = ctx.message as any;
     let mediaType: "photo" | "video" | "animation" | null = null;
@@ -422,7 +455,11 @@ export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
     if (msg.animation) {
       mediaType = "animation";
       fileId = msg.animation.file_id;
-    } else if (msg.document && msg.document.mime_type === "image/gif") {
+    } else if (
+      msg.document &&
+      (msg.document.mime_type === "image/gif" ||
+        (msg.document.file_name && msg.document.file_name.toLowerCase().endsWith(".gif")))
+    ) {
       mediaType = "animation";
       fileId = msg.document.file_id;
     } else if (msg.photo && msg.photo.length > 0) {
@@ -441,21 +478,13 @@ export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
       return true;
     }
 
-    const now = Math.floor(Date.now() / 1000);
+    // Save directly into the unified DMUI configuration
+    const config = (await DB_MANAGER.getSetting<DMUIConfig>(ctx.env.DB, DMUI_CONFIG_KEY)) || {};
+    config.mediaType = mediaType;
+    config.mediaFileId = fileId;
 
-    // Save media type and file ID to D1
-    await ctx.env.DB.prepare(
-      `UPDATE dmui_settings 
-       SET media_type = ?, media_file_id = ?, updated_at = ? 
-       WHERE id = 1`
-    )
-      .bind(mediaType, fileId, now)
-      .run();
-
-    // Reset setup step
-    await ctx.env.DB.prepare("UPDATE dmui_config SET step = 'IDLE' WHERE owner_id = ?")
-      .bind(ctx.userId)
-      .run();
+    await DB_MANAGER.setSetting(ctx.env.DB, DMUI_CONFIG_KEY, config);
+    await DB_MANAGER.setSetting(ctx.env.DB, DMUI_STATE_KEY, "IDLE");
 
     const mediaLabel = mediaType === "animation" ? "GIF Animation" : mediaType.toUpperCase();
     await sendMessage(
@@ -467,7 +496,7 @@ export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
       {
         inline_keyboard: [
           [{ text: "👁 Preview DMUI", callback_data: "dmui:preview" }],
-          [{ text: "🔙 Return to DMUI Panel", callback_data: "dmui:main" }],
+          [{ text: "🔙 Return to /dmui", callback_data: "dmui:root" }],
         ],
       }
     );
