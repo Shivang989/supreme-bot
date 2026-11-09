@@ -16,6 +16,26 @@ import {
   compileInlineKeyboard,
 } from "./dmui";
 
+async function sendAnimation(
+  chatId: number,
+  animation: string,
+  caption?: string,
+  replyMarkup?: any
+): Promise<any> {
+  const res = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendAnimation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      animation,
+      caption,
+      parse_mode: "HTML",
+      reply_markup: replyMarkup,
+    }),
+  });
+  return await res.json();
+}
+
 // Group Welcome (Unmodified)
 export async function handleWelcome(
   env: CloudflareEnv,
@@ -108,7 +128,16 @@ export const systemHandlers: Record<string, CommandHandler> = {
     const buttonRows = liveConfig.buttonRows || getDefaultButtons();
     const dmKeyboard = compileInlineKeyboard(buttonRows);
 
-    // 3. Resolve Media with Fallback
+    // 3. Resolve Media with Fallback (GIF Animation, Photo, Video)
+    if (liveConfig.mediaType === "animation" && liveConfig.mediaFileId) {
+      try {
+        const res = await sendAnimation(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
+        if (res.ok) return;
+      } catch (e) {
+        console.error("sendAnimation failed:", e);
+      }
+    }
+
     if (liveConfig.mediaType === "photo" && liveConfig.mediaFileId) {
       try {
         const res = await sendPhoto(ctx.chatId, liveConfig.mediaFileId, dmText, dmKeyboard);
