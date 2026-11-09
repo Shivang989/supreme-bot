@@ -12,6 +12,26 @@ import {
 const DMUI_CONFIG_KEY = "dmui_live_config";
 const DMUI_STATE_KEY = "dmui_owner_state";
 
+async function sendAnimation(
+  chatId: number,
+  animation: string,
+  caption?: string,
+  replyMarkup?: any
+): Promise<any> {
+  const res = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendAnimation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      animation,
+      caption,
+      parse_mode: "HTML",
+      reply_markup: replyMarkup,
+    }),
+  });
+  return await res.json();
+}
+
 export function isOwner(userId: number): boolean {
   return userId === Number(CONFIG.OWNER_ID);
 }
@@ -384,44 +404,77 @@ export async function handleDMUITextInput(ctx: BotContext): Promise<boolean> {
 
 // Handle Incoming Photos/Videos for Media Attachment
 export async function handleDMUIMediaInput(ctx: BotContext): Promise<boolean> {
-  if (!isOwner(ctx.userId)) return false;
+  if (ctx.userId !== Number(CONFIG.OWNER_ID)) return false;
 
-  const state = await DB_MANAGER.getSetting<string>(ctx.env.DB, DMUI_STATE_KEY);
-  if (state !== "AWAIT_MEDIA") return false;
+  try {
+    const session = await ctx.env.DB.prepare(
+      "SELECT step FROM dmui_config WHERE owner_id = ?"
+    )
+      .bind(ctx.userId)
+      .first<{ step: string }>();
 
-  let fileId: string | null = null;
-  let type: "photo" | "video" = "photo";
+    if (!session || session.step !== "AWAIT_MEDIA") return false;
 
-  if (ctx.message.photo && ctx.message.photo.length > 0) {
-    const highestQuality = ctx.message.photo[ctx.message.photo.length - 1];
-    fileId = highestQuality.file_id;
-    type = "photo";
-  } else if (ctx.message.video) {
-    fileId = ctx.message.video.file_id;
-    type = "video";
+    const msg = ctx.message as any;
+    let mediaType: "photo" | "video" | "animation" | null = null;
+    let fileId: string | null = null;
+
+    if (msg.animation) {
+      mediaType = "animation";
+      fileId = msg.animation.file_id;
+    } else if (msg.document && msg.document.mime_type === "image/gif") {
+      mediaType = "animation";
+      fileId = msg.document.file_id;
+    } else if (msg.photo && msg.photo.length > 0) {
+      mediaType = "photo";
+      fileId = msg.photo[msg.photo.length - 1].file_id;
+    } else if (msg.video) {
+      mediaType = "video";
+      fileId = msg.video.file_id;
+    }
+
+    if (!mediaType || !fileId) {
+      await sendMessage(
+        ctx.chatId,
+        "⚠️ Unsupported media format. Please send a <b>Photo</b>, <b>Video</b>, or <b>GIF</b>."
+      );
+      return true;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+
+    // Save media type and file ID to D1
+    await ctx.env.DB.prepare(
+      `UPDATE dmui_settings 
+       SET media_type = ?, media_file_id = ?, updated_at = ? 
+       WHERE id = 1`
+    )
+      .bind(mediaType, fileId, now)
+      .run();
+
+    // Reset setup step
+    await ctx.env.DB.prepare("UPDATE dmui_config SET step = 'IDLE' WHERE owner_id = ?")
+      .bind(ctx.userId)
+      .run();
+
+    const mediaLabel = mediaType === "animation" ? "GIF Animation" : mediaType.toUpperCase();
+    await sendMessage(
+      ctx.chatId,
+      `✅ <b>Media Updated!</b>\n\n` +
+        `• <b>Type:</b> <code>${mediaLabel}</code>\n` +
+        `• <b>File ID:</b> <code>${fileId.slice(0, 20)}...</code>\n\n` +
+        `Your DM panel will now display this ${mediaLabel}.`,
+      {
+        inline_keyboard: [
+          [{ text: "👁 Preview DMUI", callback_data: "dmui:preview" }],
+          [{ text: "🔙 Return to DMUI Panel", callback_data: "dmui:main" }],
+        ],
+      }
+    );
+
+    return true;
+  } catch (err: any) {
+    console.error("Non-fatal handleDMUIMediaInput error:", err);
+    return false;
   }
-
-  if (!fileId) return false;
-
-  const config = (await DB_MANAGER.getSetting<DMUIConfig>(ctx.env.DB, DMUI_CONFIG_KEY)) || {};
-  config.mediaType = type;
-  config.mediaFileId = fileId;
-
-  await DB_MANAGER.setSetting(ctx.env.DB, DMUI_CONFIG_KEY, config);
-  await DB_MANAGER.setSetting(ctx.env.DB, DMUI_STATE_KEY, "IDLE");
-
-  // Send test preview
-  if (type === "photo") {
-    await sendPhoto(ctx.chatId, fileId, `✅ <b>Photo Saved Successfully!</b>`);
-  } else {
-    await sendVideo(ctx.chatId, fileId, `✅ <b>Video Saved Successfully!</b>`);
-  }
-
-  await sendMessage(
-    ctx.chatId,
-    `Media linked to DM /start.`,
-    { inline_keyboard: [[{ text: "🔙 Return to /dmui", callback_data: "dmui:root" }]] }
-  );
-
-  return true;
 }
