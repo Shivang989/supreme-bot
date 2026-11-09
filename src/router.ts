@@ -17,7 +17,11 @@ import {
   handleBroadcastCallback,
   handleBroadcastMessageInput,
 } from "./modules/broadcastWizard";
-import { forceSubHandlers, handleForceSubCheck, handleJoinRequest } from "./modules/forceSub";
+import {
+  forceSubHandlers,
+  handleForceSubCheck,
+  handleJoinRequest,
+} from "./modules/forceSub";
 import { BROADCAST_REGISTRY } from "./modules/broadcastRegistry";
 import { BROADCAST_ENGINE } from "./modules/broadcastEngine";
 import { answerCallbackQuery } from "./index";
@@ -31,11 +35,11 @@ const commandRegistry: Record<string, CommandHandler> = {
   ...entertainmentHandlers,
   ...dmuiHandlers,
   ...broadcastHandlers,
-  ...forceSubHandlers, // Registers /add, /approved, /empty
+  ...forceSubHandlers, // /add, /approved, /empty
 };
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
-  // 1. Handle bot membership updates (promotions, kicks)
+  // 1. Bot membership changes in groups and channels
   if ((update as any).my_chat_member) {
     await BROADCAST_REGISTRY.handleChatMemberUpdated(env.DB, update);
     return;
@@ -47,7 +51,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     return;
   }
 
-  // 3. Handle Inline Button Callbacks
+  // 3. Callback Queries from inline buttons
   if (update.callback_query) {
     const cq = update.callback_query;
     const data: string = cq.data || "";
@@ -82,7 +86,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   const chatId = message.chat.id;
   const userId = message.from.id;
 
-  // Track chat and user destinations for broadcasts
+  // 4. Registry tracking for broadcasts
   await BROADCAST_REGISTRY.trackDestination(env.DB, message.chat);
   if (message.chat.type === "private") {
     await BROADCAST_REGISTRY.trackUser(env.DB, message.from);
@@ -90,9 +94,10 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     await BROADCAST_REGISTRY.trackGroupMember(env.DB, chatId, message.from);
   }
 
+  // Ensure user exists in core database
   await DB_MANAGER.ensureUserExists(env.DB, userId);
 
-  // Group welcome handler
+  // 5. Welcome new members in groups
   const newMembers =
     message.new_chat_members ||
     ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
@@ -113,30 +118,39 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     reply: message.reply_to_message,
   };
 
-  // 4. Force-Join Interceptor: Deletes message if user hasn't joined or requested
-  // Allow /approved, /add, /empty commands to pass through to authorized users
+  // 6. Force-Join Interceptor
+  // Allow /add, /approved, and /empty to bypass check so authorized admins can configure rules
+  const cleanText = (ctx.text || "").trim().toLowerCase();
   const isSetupCommand =
-    ctx.text.startsWith("/add") ||
-    ctx.text.startsWith("/approved") ||
-    ctx.text.startsWith("/empty");
+    cleanText.startsWith("/add") ||
+    cleanText.startsWith("/approved") ||
+    cleanText.startsWith("/empty");
 
   if (!isSetupCommand) {
     if (await handleForceSubCheck(ctx)) return;
   }
 
-  // Intercept owner inputs for wizards
+  // 7. Intercept owner inputs for broadcast content creation
   if (await handleBroadcastMessageInput(ctx)) return;
 
-  if (message.photo || message.video) {
+  // 8. Intercept media inputs for DMUI (Photos, Videos, GIFs, and Animation documents)
+  const rawMsg = message as any;
+  const isGifDocument =
+    rawMsg.document &&
+    (rawMsg.document.mime_type === "image/gif" ||
+      (rawMsg.document.file_name && rawMsg.document.file_name.toLowerCase().endsWith(".gif")));
+
+  if (rawMsg.photo || rawMsg.video || rawMsg.animation || isGifDocument) {
     if (await handleDMUIMediaInput(ctx)) return;
   }
 
   const rawText = message.text?.trim();
   if (!rawText) return;
 
+  // 9. Intercept DMUI text setup
   if (await handleDMUITextInput(ctx)) return;
 
-  // 5. Standard Command Execution
+  // 10. Command Dispatcher
   if (rawText.startsWith("/")) {
     const parts = rawText.split(/\s+/);
     const command = parts[0].toLowerCase().split("@")[0];
@@ -155,6 +169,6 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     }
   }
 
-  // Advance active broadcast queues continuously in background
+  // 11. Run background broadcast queue processing
   await BROADCAST_ENGINE.runContinuousWorker(env.DB, 8000);
 }
