@@ -7,6 +7,22 @@ import { sendMessage } from "../index";
 
 const BULLET_PRICE = 10; // Cost per ammo round in ₹
 
+function formatRemainingTime(seconds: number): string {
+  if (seconds <= 0) return "0s";
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || (d === 0 && h === 0)) parts.push(`${m}m`);
+  if (d === 0 && h === 0 && m === 0) parts.push(`${s}s`);
+
+  return parts.join(" ") || "a few seconds";
+}
+
 function resolveTarget(ctx: BotContext): { targetId: number | null; targetName: string } {
   if (ctx.reply && ctx.reply.from) {
     return {
@@ -28,6 +44,133 @@ function resolveTarget(ctx: BotContext): { targetId: number | null; targetName: 
 
 export const vaultHandlers: Record<string, CommandHandler> = {
   // ==========================================
+  // 🛡️ /safe - Immunity Protection from /rob
+  // ==========================================
+  "/safe": async (ctx: BotContext) => {
+    try {
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+      const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      if (!user) return;
+
+      if (user.is_alive === 0) {
+        await sendMessage(
+          ctx.chatId,
+          "💀 You are eliminated. Revive first using <code>/revive</code>.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      const activeRemaining = (user.protected_until && user.protected_until > now)
+        ? user.protected_until - now
+        : 0;
+
+      const rawPlan = (ctx.args[0] || "").toLowerCase().trim().replace("d", "");
+      const days = parseInt(rawPlan);
+
+      // Pricing matrix: 1d -> ₹300, 2d -> ₹400, 3d -> ₹600
+      const planCosts: Record<number, number> = {
+        1: 300,
+        2: 400,
+        3: 600,
+      };
+
+      if (!days || !planCosts[days]) {
+        let statusText = "⚪ <b>Status:</b> Not protected (Vulnerable to /rob)\n";
+        if (activeRemaining > 0) {
+          statusText = `🟢 <b>Status:</b> Protected (<b>${formatRemainingTime(activeRemaining)}</b> remaining)\n`;
+        }
+
+        const infoCard =
+          `🛡️ <b>SAFE VAULT PROTECTION</b>\n\n` +
+          `Keep your cash 100% immune from <code>/rob</code> attempts!\n` +
+          `Any player who attempts to rob your vault while safe will be penalized a <b>₹10 compensation fee</b> credited to you.\n\n` +
+          `${statusText}\n` +
+          `📋 <b>Protection Rates:</b>\n` +
+          `• <b>1 Day (1d):</b> ₹300\n` +
+          `• <b>2 Days (2d):</b> ₹400\n` +
+          `• <b>3 Days (3d):</b> ₹600\n\n` +
+          `💡 <b>Usage:</b>\n` +
+          `<code>/safe 1d</code> — 1 Day protection\n` +
+          `<code>/safe 2d</code> — 2 Days protection\n` +
+          `<code>/safe 3d</code> — 3 Days protection`;
+
+        await sendMessage(ctx.chatId, infoCard, undefined, ctx.message?.message_id);
+        return;
+      }
+
+      const cost = planCosts[days];
+      const durationSeconds = days * 86400;
+
+      // Cap total safe time to maximum 3 days (259,200 seconds)
+      const MAX_SAFE_SECONDS = 3 * 86400;
+      if (activeRemaining + durationSeconds > MAX_SAFE_SECONDS) {
+        await sendMessage(
+          ctx.chatId,
+          `⚠️ <b>Limit Reached:</b> Maximum safe protection allowed is 3 days.\n` +
+            `You already have <b>${formatRemainingTime(activeRemaining)}</b> active.`,
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      if (user.balance < cost) {
+        await sendMessage(
+          ctx.chatId,
+          `❌ Insufficient funds. <b>${days}d</b> safe protection costs <b>₹${cost}</b>, but you have <b>₹${user.balance}</b>.`,
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const newBalance = user.balance - cost;
+      const baseTime = activeRemaining > 0 ? user.protected_until! : now;
+      const newProtectedUntil = baseTime + durationSeconds;
+
+      // Ensure column exists and update
+      try {
+        await ctx.env.DB.prepare(
+          "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
+        )
+          .bind(newBalance, newProtectedUntil, ctx.userId)
+          .run();
+      } catch {
+        await ctx.env.DB.prepare("ALTER TABLE users ADD COLUMN protected_until INTEGER DEFAULT 0").run();
+        await ctx.env.DB.prepare(
+          "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
+        )
+          .bind(newBalance, newProtectedUntil, ctx.userId)
+          .run();
+      }
+
+      const totalRemaining = newProtectedUntil - now;
+      const receiptCard = createStatusCard({
+        title: "🛡️ SAFE ACTIVATED",
+        rows: [
+          { label: "👤 PLAYER", value: ctx.message.from.first_name },
+          { label: "⏱️ PLAN", value: `${days} Day${days > 1 ? "s" : ""}` },
+          { label: "💰 COST", value: `₹${cost}` },
+          { label: "⏳ SECURED", value: formatRemainingTime(totalRemaining) },
+          { label: "💼 CASH REMAINING", value: `₹${newBalance}` },
+        ],
+        footer: "🔒 100% immune to /rob. Thieves will be charged ₹10 compensation.",
+      });
+
+      await sendMessage(ctx.chatId, receiptCard, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Safe handler failure:", err);
+      await sendMessage(
+        ctx.chatId,
+        `⚠️ <b>Error processing safe:</b> <code>${err?.message || "Internal error"}</code>`
+      );
+    }
+  },
+
+  // ==========================================
   // 🔫 /b or /bullets - Check Ammo & Purchase
   // ==========================================
   "/bal": async (ctx: BotContext) => {
@@ -43,7 +186,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
     const requestedAmount = parseInt(ctx.args[0]);
 
-    // View current ammo magazine
     if (isNaN(requestedAmount) || requestedAmount <= 0) {
       const card = createStatusCard({
         title: "🔫 AMMO MAGAZINE",
@@ -60,7 +202,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    // Purchase rounds
     const totalCost = requestedAmount * BULLET_PRICE;
     if (user.balance < totalCost) {
       await sendMessage(
@@ -101,16 +242,13 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   // ==========================================
   "/daily": async (ctx: BotContext) => {
     try {
-      // 1. Ensure user exists and table has last_daily column
       await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
 
       const REWARD = 1000;
-      const COOLDOWN_SECONDS = 86400; // 24 hours
+      const COOLDOWN_SECONDS = 86400;
       const now = Math.floor(Date.now() / 1000);
       const threshold = now - COOLDOWN_SECONDS;
 
-      // 2. Atomic update query:
-      // Eligible only if last_daily is NULL, 0, or older than 24 hours ago (threshold)
       const updateResult = await ctx.env.DB.prepare(
         `UPDATE users
          SET balance = balance + ?, last_daily = ?
@@ -121,7 +259,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
       const changes = updateResult.meta?.changes ?? updateResult.meta?.rows_written ?? 0;
 
-      // 3. Successful Claim
       if (changes > 0) {
         const successText =
           `🎁 <b>Daily Reward Claimed!</b>\n\n` +
@@ -132,25 +269,14 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         return;
       }
 
-      // 4. Cooldown Active: Fetch exact remaining time
       const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
       const lastDaily = user?.last_daily ?? 0;
       const elapsed = now - lastDaily;
       const remainingSeconds = Math.max(0, COOLDOWN_SECONDS - elapsed);
 
-      const hours = Math.floor(remainingSeconds / 3600);
-      const minutes = Math.floor((remainingSeconds % 3600) / 60);
-      const seconds = remainingSeconds % 60;
-
-      const timeParts: string[] = [];
-      if (hours > 0) timeParts.push(`${hours}h`);
-      if (minutes > 0 || hours > 0) timeParts.push(`${minutes}m`);
-      timeParts.push(`${seconds}s`);
-      const formattedRemaining = timeParts.join(" ") || "a few seconds";
-
       const cooldownText =
         `⏳ <b>You've already claimed your daily reward.</b>\n\n` +
-        `Next reward available in: "${formattedRemaining}"`;
+        `Next reward available in: "${formatRemainingTime(remainingSeconds)}"`;
 
       await sendMessage(ctx.chatId, cooldownText, undefined, ctx.message?.message_id);
     } catch (err: any) {
@@ -162,13 +288,15 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     }
   },
 
-
   // ==========================================
   // 👤 /me or /profile - Underworld Dossier
   // ==========================================
   "/me": async (ctx: BotContext) => {
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
     if (!user) return;
+
+    const now = Math.floor(Date.now() / 1000);
+    const isSafe = user.protected_until && user.protected_until > now;
 
     const card = createStatusCard({
       title: "👤 UNDERWORLD DOSSIER",
@@ -178,10 +306,13 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         { label: "💰 CASH", value: `₹${user.balance}` },
         { label: "🔫 AMMO", value: `${user.ammo ?? 0} rounds` },
         { label: "💀 KILLS", value: user.kills ?? 0 },
+        { label: "🛡️ SAFE VAULT", value: isSafe ? formatRemainingTime(user.protected_until! - now) : "INACTIVE" },
         { label: "❤️ STATUS", value: user.is_alive === 0 ? "ELIMINATED" : "ALIVE" },
       ],
       footer: user.is_alive === 0
         ? "💀 STATUS • Knocked out. Use /revive to rejoin."
+        : isSafe
+        ? "🛡️ STATUS • Safe active. Immune to all /rob attempts."
         : "🟢 STATUS • Operational and armed.",
     });
 
@@ -235,7 +366,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     const recipient = await DB_MANAGER.getUser(ctx.env.DB, targetId);
     if (!recipient) return;
 
-    // Execute transfer
     await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, sender.balance - amount);
     await DB_MANAGER.updateBalance(ctx.env.DB, targetId, recipient.balance + amount);
 
@@ -254,7 +384,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   },
 
   // ==========================================
-  // 🎭 /rob - Underworld Heist
+  // 🎭 /rob - Underworld Heist (with Safe Protection & Compensation)
   // ==========================================
   "/rob": async (ctx: BotContext) => {
     const raider = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
@@ -288,25 +418,35 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    if (target.balance < 50) {
-      await sendMessage(ctx.chatId, `⚠️ ${targetName} doesn't have enough cash to steal (Min ₹50).`);
-      return;
-    }
-
-    // Shield verification
+    // Safe Vault Verification & Compensation Penalty
     const now = Math.floor(Date.now() / 1000);
     if (target.protected_until && target.protected_until > now) {
       const remainingSec = target.protected_until - now;
+      const compensation = Math.min(raider.balance, 10);
+
+      if (compensation > 0) {
+        await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance - compensation);
+        await DB_MANAGER.updateBalance(ctx.env.DB, targetId, target.balance + compensation);
+      }
+
       const card = createStatusCard({
         title: "🛡️ VAULT DEFENDED",
         rows: [
           { label: "🎯 TARGET", value: targetName },
-          { label: "🛡️ SECURITY", value: "Reinforced Shield" },
-          { label: "⏳ EXPIRY", value: `${remainingSec}s left` },
+          { label: "🛡️ STATUS", value: "100% Safe Immune" },
+          { label: "⏳ SAFE LEFT", value: formatRemainingTime(remainingSec) },
+          { label: "💸 PENALTY", value: `-₹${compensation} fee` },
+          { label: "💼 YOUR BALANCE", value: `₹${raider.balance - compensation}` },
         ],
-        footer: "❌ Alarm tripped! Target vault is secured under lock & key.",
+        footer: `🚨 Alarm tripped! Target vault is immune. ₹${compensation} was transferred to ${targetName} as compensation.`,
       });
+
       await sendMessage(ctx.chatId, card);
+      return;
+    }
+
+    if (target.balance < 50) {
+      await sendMessage(ctx.chatId, `⚠️ ${targetName} doesn't have enough cash to steal (Min ₹50).`);
       return;
     }
 
@@ -390,7 +530,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   // ==========================================
   "/market": async (ctx: BotContext) => {
     const currentTime = Math.floor(Date.now() / 1000);
-const marketEntries = Object.entries(MARKET_ITEMS);
+    const marketEntries = Object.entries(MARKET_ITEMS);
 
     const rows = marketEntries.slice(0, 6).map(([key, item]) => {
       const currentPrice = MUSCLE.calculateMarketPrice(
@@ -423,7 +563,7 @@ const marketEntries = Object.entries(MARKET_ITEMS);
       return;
     }
 
-const marketItem = MARKET_ITEMS[rawItem];
+    const marketItem = MARKET_ITEMS[rawItem];
     if (!marketItem) {
       await sendMessage(ctx.chatId, "❌ Item not traded on the black market.");
       return;
@@ -447,7 +587,6 @@ const marketItem = MARKET_ITEMS[rawItem];
     const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
     if (!user) return;
 
-    // Deduct 1 item quantity and credit user balance
     await ctx.env.DB.prepare("UPDATE inventory SET quantity = quantity - 1 WHERE user_id = ? AND item_name = ?")
       .bind(ctx.userId, rawItem)
       .run();
