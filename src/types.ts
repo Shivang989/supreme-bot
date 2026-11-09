@@ -58,11 +58,11 @@ export interface SimpleButton {
 
 export interface DMUIConfig {
   customText?: string;
-  mediaType?: "photo" | "video" | "none";
-  mediaFileId?: string;
   buttonRows?: SimpleButton[][];
   rawButtonsText?: string;
   alerts?: Record<string, string>;
+  mediaType?: "photo" | "video" | "animation" | "none";
+  mediaFileId?: string;
 }
 
 export interface DMButton {
