@@ -2,7 +2,7 @@ import { BotContext, CommandHandler, TelegramUpdate, CloudflareEnv } from "./typ
 import { DB_MANAGER } from "./db";
 import { handleWelcome, systemHandlers } from "./modules/system";
 import { adminHandlers } from "./modules/admin";
-import { vaultHandlers } from "./modules/vault";
+import { vaultHandlers, handleSafeCallback } from "./modules/vault";
 import { combatHandlers } from "./modules/combat";
 import { entertainmentHandlers } from "./modules/entertainment";
 import { helpHandlers } from "./modules/help";
@@ -78,15 +78,18 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
 
     if (await handleBroadcastCallback(env, cq)) return;
     if (await handleDMUICallback(env, cq)) return;
+    if (await handleSafeCallback(env, cq)) return;
+    return;
   }
 
+  // 4. Message validations and identifier extraction
   const message = update.message;
   if (!message || !message.from) return;
 
   const chatId = message.chat.id;
   const userId = message.from.id;
 
-  // 4. Registry tracking for broadcasts
+  // 5. Registry tracking for broadcasts
   await BROADCAST_REGISTRY.trackDestination(env.DB, message.chat);
   if (message.chat.type === "private") {
     await BROADCAST_REGISTRY.trackUser(env.DB, message.from);
@@ -97,7 +100,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   // Ensure user exists in core database
   await DB_MANAGER.ensureUserExists(env.DB, userId);
 
-  // 5. Welcome new members in groups
+  // 6. Welcome new members in groups
   const newMembers =
     message.new_chat_members ||
     ((message as any).new_chat_participant ? [(message as any).new_chat_participant] : []);
@@ -118,7 +121,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     reply: message.reply_to_message,
   };
 
-  // 6. Force-Join Interceptor
+  // 7. Force-Join Interceptor
   // Allow /add, /approved, and /empty to bypass check so authorized admins can configure rules
   const cleanText = (ctx.text || "").trim().toLowerCase();
   const isSetupCommand =
@@ -130,10 +133,10 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     if (await handleForceSubCheck(ctx)) return;
   }
 
-  // 7. Intercept owner inputs for broadcast content creation
+  // 8. Intercept owner inputs for broadcast content creation
   if (await handleBroadcastMessageInput(ctx)) return;
 
-  // 8. Intercept media inputs for DMUI (Photos, Videos, GIFs, and Animation documents)
+  // 9. Intercept media inputs for DMUI (Photos, Videos, GIFs, and Animation documents)
   const rawMsg = message as any;
   const isGifDocument =
     rawMsg.document &&
@@ -147,10 +150,10 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   const rawText = message.text?.trim();
   if (!rawText) return;
 
-  // 9. Intercept DMUI text setup
+  // 10. Intercept DMUI text setup
   if (await handleDMUITextInput(ctx)) return;
 
-  // 10. Command Dispatcher
+  // 11. Command Dispatcher
   if (rawText.startsWith("/")) {
     const parts = rawText.split(/\s+/);
     const command = parts[0].toLowerCase().split("@")[0];
@@ -169,6 +172,6 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     }
   }
 
-  // 11. Run background broadcast queue processing
+  // 12. Run background broadcast queue processing
   await BROADCAST_ENGINE.runContinuousWorker(env.DB, 8000);
 }

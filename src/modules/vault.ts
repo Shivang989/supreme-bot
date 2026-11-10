@@ -1,13 +1,19 @@
-import { BotContext, CommandHandler, MarketItem } from "../types";
+import { BotContext, CommandHandler, MarketItem, CloudflareEnv } from "../types";
 import { DB_MANAGER } from "../db";
 import { CONFIG, MARKET_ITEMS } from "../config";
 import { MUSCLE } from "../muscle";
 import { createStatusCard } from "../ui";
-import { sendMessage } from "../index";
+import { sendMessage, answerCallbackQuery } from "../index";
 
 const BULLET_PRICE = 10; // Cost per ammo round in ₹
 
-function formatRemainingTime(seconds: number): string {
+export const SAFE_PLANS: Record<number, number> = {
+  1: 300, // 1 Day -> ₹300
+  2: 400, // 2 Days -> ₹400
+  3: 600, // 3 Days -> ₹600
+};
+
+export function formatRemainingTime(seconds: number): string {
   if (seconds <= 0) return "0s";
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
@@ -42,6 +48,114 @@ function resolveTarget(ctx: BotContext): { targetId: number | null; targetName: 
   return { targetId: null, targetName: "Unknown" };
 }
 
+/**
+ * Core business logic for purchasing / extending safe protection
+ */
+export async function processSafePurchase(
+  env: CloudflareEnv,
+  userId: number,
+  userName: string,
+  days: number
+): Promise<{ ok: boolean; message: string; receiptCard?: string }> {
+  await DB_MANAGER.ensureUserExists(env.DB, userId);
+  const user = await DB_MANAGER.getUser(env.DB, userId);
+  if (!user) return { ok: false, message: "⚠️ Operative profile not found." };
+
+  if (user.is_alive === 0) {
+    return { ok: false, message: "💀 You are eliminated. Revive first using <code>/revive</code>." };
+  }
+
+  const cost = SAFE_PLANS[days];
+  if (!cost) {
+    return { ok: false, message: "⚠️ Invalid safe duration. Choose 1d, 2d, or 3d." };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const activeRemaining = user.protected_until && user.protected_until > now
+    ? user.protected_until - now
+    : 0;
+
+  const durationSec = days * 86400;
+  const MAX_SAFE_SECONDS = 3 * 86400; // 3 Days Max
+
+  if (activeRemaining + durationSec > MAX_SAFE_SECONDS) {
+    return {
+      ok: false,
+      message:
+        `⚠️ <b>Max Safe Limit Exceeded:</b> Maximum total protection allowed is 3 days (72h).\n` +
+        `You currently have <b>${formatRemainingTime(activeRemaining)}</b> remaining.`,
+    };
+  }
+
+  if (user.balance < cost) {
+    return {
+      ok: false,
+      message: `❌ Insufficient funds. <b>${days}d</b> protection costs <b>₹${cost}</b>, but you have <b>₹${user.balance}</b>.`,
+    };
+  }
+
+  const newBalance = user.balance - cost;
+  const baseTime = activeRemaining > 0 ? user.protected_until! : now;
+  const newProtectedUntil = baseTime + durationSec;
+
+  try {
+    await env.DB.prepare(
+      "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
+    )
+      .bind(newBalance, newProtectedUntil, userId)
+      .run();
+  } catch {
+    await env.DB.prepare("ALTER TABLE users ADD COLUMN protected_until INTEGER DEFAULT 0").run();
+    await env.DB.prepare(
+      "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
+    )
+      .bind(newBalance, newProtectedUntil, userId)
+      .run();
+  }
+
+  const totalRemaining = newProtectedUntil - now;
+  const receiptCard = createStatusCard({
+    title: "🛡️ SAFE ACTIVATED",
+    rows: [
+      { label: "👤 PLAYER", value: userName },
+      { label: "⏱️ DURATION", value: `${days} Day${days > 1 ? "s" : ""}` },
+      { label: "💰 COST", value: `₹${cost}` },
+      { label: "⏳ SECURED", value: formatRemainingTime(totalRemaining) },
+      { label: "💼 CASH LEFT", value: `₹${newBalance}` },
+    ],
+    footer: "🔒 100% immune to /rob. Thieves will be charged ₹10 compensation to you.",
+  });
+
+  return { ok: true, message: "Safe activated successfully!", receiptCard };
+}
+
+/**
+ * Handle DM Button Clicks for /safe
+ */
+export async function handleSafeCallback(env: CloudflareEnv, cq: any): Promise<boolean> {
+  const data: string = cq.data || "";
+  if (!data.startsWith("safe_buy:")) return false;
+
+  const days = parseInt(data.replace("safe_buy:", ""));
+  const userId = cq.from?.id;
+  const chatId = cq.message?.chat?.id;
+
+  if (!userId || !chatId || !days) return false;
+
+  const result = await processSafePurchase(env, userId, cq.from?.first_name || "Player", days);
+
+  if (!result.ok) {
+    await answerCallbackQuery(cq.id, result.message.replace(/<[^>]*>/g, ""), true);
+    return true;
+  }
+
+  await answerCallbackQuery(cq.id, `✅ ${days} Day Safe Protection Activated!`);
+  if (result.receiptCard) {
+    await sendMessage(chatId, result.receiptCard);
+  }
+  return true;
+}
+
 export const vaultHandlers: Record<string, CommandHandler> = {
   // ==========================================
   // 🛡️ /safe - Immunity Protection from /rob
@@ -52,115 +166,83 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
       if (!user) return;
 
-      if (user.is_alive === 0) {
-        await sendMessage(
-          ctx.chatId,
-          "💀 You are eliminated. Revive first using <code>/revive</code>.",
-          undefined,
-          ctx.message?.message_id
-        );
-        return;
-      }
-
       const now = Math.floor(Date.now() / 1000);
-      const activeRemaining = (user.protected_until && user.protected_until > now)
+      const activeRemaining = user.protected_until && user.protected_until > now
         ? user.protected_until - now
         : 0;
 
       const rawPlan = (ctx.args[0] || "").toLowerCase().trim().replace("d", "");
       const days = parseInt(rawPlan);
 
-      // Pricing matrix: 1d -> ₹300, 2d -> ₹400, 3d -> ₹600
-      const planCosts: Record<number, number> = {
-        1: 300,
-        2: 400,
-        3: 600,
-      };
-
-      if (!days || !planCosts[days]) {
-        let statusText = "⚪ <b>Status:</b> Not protected (Vulnerable to /rob)\n";
-        if (activeRemaining > 0) {
-          statusText = `🟢 <b>Status:</b> Protected (<b>${formatRemainingTime(activeRemaining)}</b> remaining)\n`;
+      // Direct text command executed: /safe 1d, /safe 2d, /safe 3d
+      if (days && SAFE_PLANS[days]) {
+        const result = await processSafePurchase(
+          ctx.env,
+          ctx.userId,
+          ctx.message.from.first_name,
+          days
+        );
+        
+        if (!result.ok) {
+          await sendMessage(ctx.chatId, result.message, undefined, ctx.message?.message_id);
+          return;
         }
 
-        const infoCard =
+        if (result.receiptCard) {
+          await sendMessage(ctx.chatId, result.receiptCard, undefined, ctx.message?.message_id);
+        }
+        return;
+      }
+
+      // No argument provided: Construct the status & text guide
+      let statusText = "⚪ <b>Status:</b> Not protected (Vulnerable to /rob)\n";
+      if (activeRemaining > 0) {
+        statusText = `🟢 <b>Status:</b> Protected (<b>${formatRemainingTime(activeRemaining)}</b> remaining)\n`;
+      }
+
+      const isPrivate = ctx.message.chat.type === "private" || ctx.chatId > 0;
+
+      if (isPrivate) {
+        // DM: Text Guide + Interactive Purchase Buttons
+        const dmGuide =
           `🛡️ <b>SAFE VAULT PROTECTION</b>\n\n` +
-          `Keep your cash 100% immune from <code>/rob</code> attempts!\n` +
-          `Any player who attempts to rob your vault while safe will be penalized a <b>₹10 compensation fee</b> credited to you.\n\n` +
+          `Protect your money with 100% immunity from <code>/rob</code> attacks!\n` +
+          `Anyone who attempts to rob your vault is penalized a <b>₹10 compensation fee</b> credited straight to you.\n\n` +
           `${statusText}\n` +
           `📋 <b>Protection Rates:</b>\n` +
           `• <b>1 Day (1d):</b> ₹300\n` +
           `• <b>2 Days (2d):</b> ₹400\n` +
           `• <b>3 Days (3d):</b> ₹600\n\n` +
-          `💡 <b>Usage:</b>\n` +
-          `<code>/safe 1d</code> — 1 Day protection\n` +
-          `<code>/safe 2d</code> — 2 Days protection\n` +
-          `<code>/safe 3d</code> — 3 Days protection`;
+          `Tap a button below to activate safe protection:`;
 
-        await sendMessage(ctx.chatId, infoCard, undefined, ctx.message?.message_id);
-        return;
+        const dmKb = {
+          inline_keyboard: [
+            [
+              { text: "🛡️ 1 Day (₹300)", callback_data: "safe_buy:1" },
+              { text: "🛡️ 2 Days (₹400)", callback_data: "safe_buy:2" },
+            ],
+            [
+              { text: "🛡️ 3 Days (₹600)", callback_data: "safe_buy:3" },
+            ],
+          ],
+        };
+
+        await sendMessage(ctx.chatId, dmGuide, dmKb, ctx.message?.message_id);
+      } else {
+        // Group: Informative Text Guide with Command Instructions
+        const groupGuide =
+          `🛡️ <b>SAFE VAULT PROTECTION</b>\n\n` +
+          `Protect your money with 100% immunity from <code>/rob</code> attacks!\n` +
+          `Anyone who attempts to rob your vault is penalized a <b>₹10 compensation fee</b> credited straight to you.\n\n` +
+          `${statusText}\n` +
+          `📋 <b>Protection Rates & Commands:</b>\n` +
+          `• <code>/safe 1d</code> — 1 Day (₹300)\n` +
+          `• <code>/safe 2d</code> — 2 Days (₹400)\n` +
+          `• <code>/safe 3d</code> — 3 Days (₹600)\n\n` +
+          `💡 <i>Maximum protection cap is 3 days.</i>`;
+
+        await sendMessage(ctx.chatId, groupGuide, undefined, ctx.message?.message_id);
       }
-
-      const cost = planCosts[days];
-      const durationSeconds = days * 86400;
-
-      // Cap total safe time to maximum 3 days (259,200 seconds)
-      const MAX_SAFE_SECONDS = 3 * 86400;
-      if (activeRemaining + durationSeconds > MAX_SAFE_SECONDS) {
-        await sendMessage(
-          ctx.chatId,
-          `⚠️ <b>Limit Reached:</b> Maximum safe protection allowed is 3 days.\n` +
-            `You already have <b>${formatRemainingTime(activeRemaining)}</b> active.`,
-          undefined,
-          ctx.message?.message_id
-        );
-        return;
-      }
-
-      if (user.balance < cost) {
-        await sendMessage(
-          ctx.chatId,
-          `❌ Insufficient funds. <b>${days}d</b> safe protection costs <b>₹${cost}</b>, but you have <b>₹${user.balance}</b>.`,
-          undefined,
-          ctx.message?.message_id
-        );
-        return;
-      }
-
-      const newBalance = user.balance - cost;
-      const baseTime = activeRemaining > 0 ? user.protected_until! : now;
-      const newProtectedUntil = baseTime + durationSeconds;
-
-      // Ensure column exists and update
-      try {
-        await ctx.env.DB.prepare(
-          "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
-        )
-          .bind(newBalance, newProtectedUntil, ctx.userId)
-          .run();
-      } catch {
-        await ctx.env.DB.prepare("ALTER TABLE users ADD COLUMN protected_until INTEGER DEFAULT 0").run();
-        await ctx.env.DB.prepare(
-          "UPDATE users SET balance = ?, protected_until = ? WHERE user_id = ?"
-        )
-          .bind(newBalance, newProtectedUntil, ctx.userId)
-          .run();
-      }
-
-      const totalRemaining = newProtectedUntil - now;
-      const receiptCard = createStatusCard({
-        title: "🛡️ SAFE ACTIVATED",
-        rows: [
-          { label: "👤 PLAYER", value: ctx.message.from.first_name },
-          { label: "⏱️ PLAN", value: `${days} Day${days > 1 ? "s" : ""}` },
-          { label: "💰 COST", value: `₹${cost}` },
-          { label: "⏳ SECURED", value: formatRemainingTime(totalRemaining) },
-          { label: "💼 CASH REMAINING", value: `₹${newBalance}` },
-        ],
-        footer: "🔒 100% immune to /rob. Thieves will be charged ₹10 compensation.",
-      });
-
-      await sendMessage(ctx.chatId, receiptCard, undefined, ctx.message?.message_id);
     } catch (err: any) {
       console.error("Safe handler failure:", err);
       await sendMessage(
@@ -304,7 +386,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         { label: "👤 PLAYER", value: ctx.message.from.first_name },
         { label: "🆔 UID", value: ctx.userId },
         { label: "💰 CASH", value: `₹${user.balance}` },
-        { label: "🔫 AMMO", value: `${user.ammo ?? 0} rounds` },
+        { label: "🔋 AMMO", value: `${user.ammo ?? 0} rounds` },
         { label: "💀 KILLS", value: user.kills ?? 0 },
         { label: "🛡️ SAFE VAULT", value: isSafe ? formatRemainingTime(user.protected_until! - now) : "INACTIVE" },
         { label: "❤️ STATUS", value: user.is_alive === 0 ? "ELIMINATED" : "ALIVE" },
@@ -384,7 +466,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   },
 
   // ==========================================
-  // 🎭 /rob - Underworld Heist (with Safe Protection & Compensation)
+  // 🎭 /rob - Underworld Heist (100% Block + ₹10 Compensation)
   // ==========================================
   "/rob": async (ctx: BotContext) => {
     const raider = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
@@ -418,27 +500,30 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       return;
     }
 
-    // Safe Vault Verification & Compensation Penalty
+    // Safe Vault Verification & ₹10 Compensation Transfer
     const now = Math.floor(Date.now() / 1000);
     if (target.protected_until && target.protected_until > now) {
       const remainingSec = target.protected_until - now;
-      const compensation = Math.min(raider.balance, 10);
+      const penaltyAmount = 10;
+      const deducted = Math.min(raider.balance, penaltyAmount);
 
-      if (compensation > 0) {
-        await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance - compensation);
-        await DB_MANAGER.updateBalance(ctx.env.DB, targetId, target.balance + compensation);
+      // Charge penalty to raider
+      if (deducted > 0) {
+        await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance - deducted);
       }
+      // Credit full compensation to safe target
+      await DB_MANAGER.updateBalance(ctx.env.DB, targetId, target.balance + penaltyAmount);
 
       const card = createStatusCard({
-        title: "🛡️ VAULT DEFENDED",
+        title: "🛡️ SAFE IMMUNITY TRIGGERED",
         rows: [
           { label: "🎯 TARGET", value: targetName },
           { label: "🛡️ STATUS", value: "100% Safe Immune" },
           { label: "⏳ SAFE LEFT", value: formatRemainingTime(remainingSec) },
-          { label: "💸 PENALTY", value: `-₹${compensation} fee` },
-          { label: "💼 YOUR BALANCE", value: `₹${raider.balance - compensation}` },
+          { label: "💸 PENALTY", value: `-₹${penaltyAmount} Fee` },
+          { label: "💼 YOUR CASH", value: `₹${Math.max(0, raider.balance - penaltyAmount)}` },
         ],
-        footer: `🚨 Alarm tripped! Target vault is immune. ₹${compensation} was transferred to ${targetName} as compensation.`,
+        footer: `🚨 Alarm tripped! Target vault is immune. ₹${penaltyAmount} penalty was transferred to ${targetName} as compensation.`,
       });
 
       await sendMessage(ctx.chatId, card);
