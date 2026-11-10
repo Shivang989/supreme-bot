@@ -27,6 +27,21 @@ function formatRemainingTime(seconds: number): string {
   return parts.join(" ") || "1m";
 }
 
+// Converts ASCII alphanumeric text into Mathematical Sans-Serif Bold fancy text
+function toFancy(text: string): string {
+  const fancyMap: Record<string, string> = {
+    A: "𝗔", B: "𝗕", C: "𝗖", D: "𝗗", E: "𝗘", F: "𝗙", G: "𝗚", H: "𝗛", I: "𝗜", J: "𝗝",
+    K: "𝗞", L: "𝗟", M: "𝗠", N: "𝗡", O: "𝗢", P: "𝗣", Q: "𝗤", R: "𝗥", S: "𝗦", T: "𝗧",
+    U: "𝗨", V: "𝗩", W: "𝗪", X: "𝗫", Y: "𝗬", Z: "𝗭",
+    a: "𝗮", b: "𝗯", c: "𝗰", d: "𝗱", e: "𝗲", f: "𝗳", g: "𝗴", h: "𝗵", i: "𝗶", j: "𝗷",
+    k: "𝗸", l: "𝗹", m: "𝗺", n: "𝗻", o: "𝗼", p: "𝗽", q: "𝗾", r: "𝗿", s: "𝘀", t: "𝘁",
+    u: "𝘂", v: "𝘃", w: "𝘄", x: "𝘅", y: "𝘆", z: "𝘇",
+    0: "𝟬", 1: "𝟭", 2: "𝟮", 3: "𝟯", 4: "𝟰", 5: "𝟱", 6: "𝟲", 7: "𝟳", 8: "𝟴", 9: "𝟵",
+  };
+  return text.split("").map((c) => fancyMap[c] || c).join("");
+}
+
+
 function resolveTarget(ctx: BotContext): { targetId: number | null; targetName: string } {
   if (ctx.reply && ctx.reply.from) {
     return {
@@ -331,8 +346,9 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     await sendMessage(ctx.chatId, successCard);
   },
 
+
   // ==========================================
-  // 💰 /bal or /balance - Simplified Player Profile
+  // 💰 /bal or /balance - Compact Fancy Profile
   // ==========================================
   "/bal": async (ctx: BotContext) => {
     try {
@@ -342,7 +358,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       // Behaviour B: Replying to another player's message
       // ----------------------------------------------------
       if (reply) {
-        // Validate identifiable Telegram user (not a bot, not an anonymous channel)
         if (!reply.from || reply.from.is_bot) {
           await sendMessage(
             ctx.chatId,
@@ -355,7 +370,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
         const targetId = reply.from.id;
 
-        // If user replies to their own message, fall through to Behaviour A
+        // If not a self-reply, inspect the target player
         if (targetId !== ctx.userId) {
           const targetUser = await DB_MANAGER.getUser(ctx.env.DB, targetId);
 
@@ -374,13 +389,19 @@ export const vaultHandlers: Record<string, CommandHandler> = {
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
 
-          const responseText =
-            `💰 <b>Player Profile</b>\n\n` +
-            `👤 Name: ${targetName}\n` +
-            `💵 Balance: ₹${targetUser.balance ?? 0}\n` +
-            `☠️ Kills: ${targetUser.kills ?? 0}`;
+          const targetMention = `<a href="tg://user?id=${targetId}">${targetName}</a>`;
+          const isAlive = (targetUser.is_alive ?? 1) !== 0;
+          const status = toFancy(isAlive ? "(Alive)" : "(Dead)");
 
-          await sendMessage(ctx.chatId, responseText, undefined, ctx.message?.message_id);
+          const balance = toFancy(`₹${targetUser.balance ?? 0}`);
+          const kills = toFancy(String(targetUser.kills ?? 0));
+
+          const text =
+            `👤 ${targetMention} ${status}\n` +
+            `💵 ${toFancy("Balance:")} ${balance}\n` +
+            `☠️ ${toFancy("Kills:")} ${kills}`;
+
+          await sendMessage(ctx.chatId, text, undefined, ctx.message?.message_id);
           return;
         }
       }
@@ -396,18 +417,21 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
-      const balance = user?.balance ?? 0;
-      const kills = user?.kills ?? 0;
-      const bulletsLeft = user?.ammo ?? 0;
+      const mention = `<a href="tg://user?id=${ctx.userId}">${senderName}</a>`;
+      const isAlive = (user?.is_alive ?? 1) !== 0;
+      const status = toFancy(isAlive ? "(Alive)" : "(Dead)");
 
-      const profileText =
-        `💰 <b>Player Profile</b>\n\n` +
-        `👤 Name: ${senderName}\n` +
-        `💵 Balance: ₹${balance}\n` +
-        `☠️ Kills: ${kills}\n` +
-        `🔫 Bullets: ${bulletsLeft}`;
+      const balance = toFancy(`₹${user?.balance ?? 0}`);
+      const kills = toFancy(String(user?.kills ?? 0));
+      const bullets = toFancy(String(user?.ammo ?? 0));
 
-      await sendMessage(ctx.chatId, profileText, undefined, ctx.message?.message_id);
+      const text =
+        `👤 ${mention} ${status}\n` +
+        `💵 ${toFancy("Balance:")} ${balance}\n` +
+        `☠️ ${toFancy("Kills:")} ${kills}\n` +
+        `🔫 ${toFancy("Bullets:")} ${bullets}`;
+
+      await sendMessage(ctx.chatId, text, undefined, ctx.message?.message_id);
     } catch (err: any) {
       console.error("Error executing /bal:", err);
       await sendMessage(
