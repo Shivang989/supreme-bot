@@ -35,7 +35,7 @@ const commandRegistry: Record<string, CommandHandler> = {
   ...entertainmentHandlers,
   ...dmuiHandlers,
   ...broadcastHandlers,
-  ...forceSubHandlers, // /add, /approved, /empty
+  ...forceSubHandlers,
 };
 
 export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv): Promise<void> {
@@ -82,7 +82,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     return;
   }
 
-  // 4. Message validations and identifier extraction
+  // 4. Message validation & extraction
   const message = update.message;
   if (!message || !message.from) return;
 
@@ -121,8 +121,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     reply: message.reply_to_message,
   };
 
-  // 7. Force-Join Interceptor
-  // Allow /add, /approved, and /empty to bypass check so authorized admins can configure rules
+  // 7. Force-Join Interceptor (bypass for setup commands)
   const cleanText = (ctx.text || "").trim().toLowerCase();
   const isSetupCommand =
     cleanText.startsWith("/add") ||
@@ -136,7 +135,7 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
   // 8. Intercept owner inputs for broadcast content creation
   if (await handleBroadcastMessageInput(ctx)) return;
 
-  // 9. Intercept media inputs for DMUI (Photos, Videos, GIFs, and Animation documents)
+  // 9. Intercept media inputs for DMUI
   const rawMsg = message as any;
   const isGifDocument =
     rawMsg.document &&
