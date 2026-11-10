@@ -41,7 +41,6 @@ function toFancy(text: string): string {
   return text.split("").map((c) => fancyMap[c] || c).join("");
 }
 
-
 function resolveTarget(ctx: BotContext): { targetId: number | null; targetName: string } {
   if (ctx.reply && ctx.reply.from) {
     return {
@@ -76,20 +75,19 @@ export async function activateSafeProtection(
       message:
         "🛡️ <b>Safe Protection</b>\n\n" +
         "Usage:\n" +
-        '<code>/safe 1</code> — 1 day (₹300)\n' +
-        '<code>/safe 2</code> — 2 days (₹400)\n' +
-        '<code>/safe 3</code> — 3 days (₹600)\n\n' +
+        "<code>/safe 1</code> — 1 day (₹300)\n" +
+        "<code>/safe 2</code> — 2 days (₹400)\n" +
+        "<code>/safe 3</code> — 3 days (₹600)\n\n" +
         "Protection prevents robbery while active.",
     };
   }
 
   await DB_MANAGER.ensureUserExists(env.DB, userId);
   const user = await DB_MANAGER.getUser(env.DB, userId);
-  if (!user) return { ok: false, message: "⚠️ User profile not found." };
+  if (!user) return { ok: false, message: "⚠️ Operative profile not found." };
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Check if protection is already active (No stacking)
   if (user.protected_until && user.protected_until > now) {
     const remaining = formatRemainingTime(user.protected_until - now);
     return {
@@ -101,7 +99,6 @@ export async function activateSafeProtection(
     };
   }
 
-  // Check balance
   if (user.balance < plan.price) {
     return {
       ok: false,
@@ -115,7 +112,6 @@ export async function activateSafeProtection(
 
   const expiryTimestamp = now + plan.durationSec;
 
-  // Atomic database update
   try {
     const result = await env.DB.prepare(
       `UPDATE users 
@@ -192,7 +188,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
       const rawArg = (ctx.args[0] || "").toLowerCase().trim().replace("d", "");
       const isPrivate = ctx.message.chat.type === "private" || ctx.chatId > 0;
 
-      // Complete command provided: /safe 1, /safe 2, /safe 3
       if (rawArg === "1" || rawArg === "2" || rawArg === "3") {
         const days = parseInt(rawArg);
         const res = await activateSafeProtection(ctx.env, ctx.userId, days);
@@ -200,9 +195,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         return;
       }
 
-      // No argument provided:
       if (isPrivate) {
-        // DM: Short explanation + 3 Duration Buttons
         const dmText =
           `🛡️ <b>Safe Protection</b>\n\n` +
           `Choose your protection duration:\n\n` +
@@ -222,7 +215,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
         await sendMessage(ctx.chatId, dmText, dmKb, ctx.message.message_id);
       } else {
-        // Groups: Plain text guidance
         const groupText =
           `🛡️ <b>Safe Protection</b>\n\n` +
           `Usage:\n` +
@@ -240,112 +232,178 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   },
 
   // ==========================================
-  // 🎭 /rob - Underworld Heist (Enforces Safe Immunity + ₹10 Compensation)
+  // 🎭 /rob - Underworld Robbery
   // ==========================================
   "/rob": async (ctx: BotContext) => {
-    const raider = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    if (!raider) return;
+    try {
+      const reply = ctx.reply;
 
-    if (raider.is_alive === 0) {
-      await sendMessage(ctx.chatId, "💀 You are eliminated. Revive first using <code>/revive</code>.");
-      return;
-    }
+      // ----------------------------------------------------
+      // Behaviour C: No reply -> Show short usage guide
+      // ----------------------------------------------------
+      if (!reply) {
+        const guideText =
+          `💰 <b>Robbery Usage</b>\n\n` +
+          `Reply to another player's message with:\n\n` +
+          `<code>/rob</code> — Rob ₹1,000\n` +
+          `<code>/rob 250</code> — Rob ₹250`;
 
-    const { targetId, targetName } = resolveTarget(ctx);
-    if (!targetId) {
-      await sendMessage(
-        ctx.chatId,
-        "🎯 <b>Target Required:</b> Reply to a target's message or specify an ID: <code>/rob [id]</code>"
-      );
-      return;
-    }
-
-    if (targetId === ctx.userId) {
-      await sendMessage(ctx.chatId, "⚠️ You cannot rob yourself.");
-      return;
-    }
-
-    await DB_MANAGER.ensureUserExists(ctx.env.DB, targetId);
-    const target = await DB_MANAGER.getUser(ctx.env.DB, targetId);
-    if (!target) return;
-
-    if (target.is_alive === 0) {
-      await sendMessage(ctx.chatId, `⚠️ ${targetName} is already eliminated.`);
-      return;
-    }
-
-    // Critical: Timestamp-based Protection Check
-    const now = Math.floor(Date.now() / 1000);
-    if (target.protected_until && target.protected_until > now) {
-      const penalty = 10;
-      const deducted = Math.min(raider.balance, penalty);
-
-      if (deducted > 0) {
-        await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance - deducted);
+        await sendMessage(ctx.chatId, guideText, undefined, ctx.message?.message_id);
+        return;
       }
-      await DB_MANAGER.updateBalance(ctx.env.DB, targetId, target.balance + penalty);
 
+      // ----------------------------------------------------
+      // Reply Target Validation
+      // ----------------------------------------------------
+      if (!reply.from || reply.from.is_bot) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ Unable to identify this player.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const targetId = reply.from.id;
+
+      if (targetId === ctx.userId) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ You cannot rob yourself.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      // ----------------------------------------------------
+      // Parse & Validate Amount
+      // ----------------------------------------------------
+      let amount = 1000; // Default amount if omitted
+      if (ctx.args.length > 0) {
+        const rawAmount = ctx.args[0].trim();
+        const parsed = parseInt(rawAmount, 10);
+        if (isNaN(parsed) || parsed <= 0 || !/^\d+$/.test(rawAmount)) {
+          await sendMessage(
+            ctx.chatId,
+            '❌ Invalid amount. Use "/rob" or "/rob <amount>".',
+            undefined,
+            ctx.message?.message_id
+          );
+          return;
+        }
+        amount = parsed;
+      }
+
+      // ----------------------------------------------------
+      // Attacker Profile & Status Check
+      // ----------------------------------------------------
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+      const attacker = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      if (!attacker) return;
+
+      if (attacker.is_alive === 0) {
+        await sendMessage(
+          ctx.chatId,
+          "💀 You are eliminated. Revive first using <code>/revive</code>.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      // ----------------------------------------------------
+      // Target Profile & Protection Check
+      // ----------------------------------------------------
+      const target = await DB_MANAGER.getUser(ctx.env.DB, targetId);
+      if (!target) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ Player profile not found.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const targetName = (reply.from.first_name || "Player")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      const now = Math.floor(Date.now() / 1000);
+
+      // Case 2: Target has active protection
+      if (target.protected_until && target.protected_until > now) {
+        // Credit ₹10 compensation to the attacker
+        await ctx.env.DB.prepare(
+          "UPDATE users SET balance = balance + 10 WHERE user_id = ?"
+        )
+          .bind(ctx.userId)
+          .run();
+
+        const blockedText =
+          `🛡️ <b>Robbery Blocked</b>\n\n` +
+          `You received ₹10 compensation.\n` +
+          `The target is protected.`;
+
+        await sendMessage(ctx.chatId, blockedText, undefined, ctx.message?.message_id);
+        return;
+      }
+
+      // Case 1: Target is not protected -> Check available balance
+      if ((target.balance ?? 0) < amount) {
+        await sendMessage(
+          ctx.chatId,
+          `❌ Target does not have enough money.`,
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      // Atomic Balance Transfer
+      const deductResult = await ctx.env.DB.prepare(
+        "UPDATE users SET balance = balance - ? WHERE user_id = ? AND balance >= ?"
+      )
+        .bind(amount, targetId, amount)
+        .run();
+
+      const changes = deductResult.meta?.changes ?? deductResult.meta?.rows_written ?? 0;
+      if (changes === 0) {
+        await sendMessage(
+          ctx.chatId,
+          `❌ Target does not have enough money.`,
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      // Credit the attacker
+      await ctx.env.DB.prepare(
+        "UPDATE users SET balance = balance + ? WHERE user_id = ?"
+      )
+        .bind(amount, ctx.userId)
+        .run();
+
+      const successText =
+        `💰 <b>Robbery Successful</b>\n\n` +
+        `Target: ${targetName}\n` +
+        `Robbed: ₹${amount}`;
+
+      await sendMessage(ctx.chatId, successText, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Rob command error:", err);
       await sendMessage(
         ctx.chatId,
-        `🛡️ <b>${targetName} is protected from robbery!</b>\n\n` +
-          `₹${penalty} compensation fee was deducted from your balance and paid to ${targetName}.`,
+        `⚠️ <code>${err?.message || "Execution error"}</code>`,
         undefined,
-        ctx.message.message_id
+        ctx.message?.message_id
       );
-      return;
     }
-
-    if (target.balance < 50) {
-      await sendMessage(ctx.chatId, `⚠️ ${targetName} doesn't have enough cash to steal (Min ₹50).`);
-      return;
-    }
-
-    // Heist resolution: 45% success rate
-    const roll = Math.random();
-    const success = roll <= 0.45;
-
-    if (!success) {
-      const fine = Math.min(raider.balance, 75);
-      if (fine > 0) {
-        await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance - fine);
-      }
-
-      const failCard = createStatusCard({
-        title: "🚨 HEIST FAILED",
-        rows: [
-          { label: "👤 RAIDER", value: ctx.message.from.first_name },
-          { label: "🎯 TARGET", value: targetName },
-          { label: "👮 PENALTY", value: `-₹${fine}` },
-          { label: "💼 BALANCE", value: `₹${raider.balance - fine}` },
-        ],
-        footer: "❌ Busted by local enforcers! Escaped with a fine.",
-      });
-
-      await sendMessage(ctx.chatId, failCard);
-      return;
-    }
-
-    // Success: loot 15% to 30% of target cash (capped at ₹500)
-    const stealPercent = 0.15 + Math.random() * 0.15;
-    const stolenAmount = Math.min(500, Math.max(25, Math.floor(target.balance * stealPercent)));
-
-    await DB_MANAGER.updateBalance(ctx.env.DB, targetId, target.balance - stolenAmount);
-    await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, raider.balance + stolenAmount);
-
-    const successCard = createStatusCard({
-      title: "🎭 HEIST SUCCESSFUL",
-      rows: [
-        { label: "👤 RAIDER", value: ctx.message.from.first_name },
-        { label: "🎯 TARGET", value: targetName },
-        { label: "💰 STOLEN", value: `₹${stolenAmount}` },
-        { label: "💼 NEW BALANCE", value: `₹${raider.balance + stolenAmount}` },
-      ],
-      footer: "⚡ Clean getaway. Loot safely stashed in the vault.",
-    });
-
-    await sendMessage(ctx.chatId, successCard);
   },
-
 
   // ==========================================
   // 💰 /bal or /balance - Compact Fancy Profile
@@ -354,9 +412,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     try {
       const reply = ctx.reply;
 
-      // ----------------------------------------------------
       // Behaviour B: Replying to another player's message
-      // ----------------------------------------------------
       if (reply) {
         if (!reply.from || reply.from.is_bot) {
           await sendMessage(
@@ -370,7 +426,6 @@ export const vaultHandlers: Record<string, CommandHandler> = {
 
         const targetId = reply.from.id;
 
-        // If not a self-reply, inspect the target player
         if (targetId !== ctx.userId) {
           const targetUser = await DB_MANAGER.getUser(ctx.env.DB, targetId);
 
@@ -406,9 +461,7 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         }
       }
 
-      // ----------------------------------------------------
-      // Behaviour A: Own profile (independent command or self-reply)
-      // ----------------------------------------------------
+      // Behaviour A: Own profile (independent or self-reply)
       await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
       const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
 
@@ -447,6 +500,65 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     await vaultHandlers["/bal"](ctx);
   },
 
+  // ==========================================
+  // 🔫 /b or /bullets - Check Ammo & Purchase
+  // ==========================================
+  "/b": async (ctx: BotContext) => {
+    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+    if (!user) return;
+
+    const requestedAmount = parseInt(ctx.args[0]);
+
+    if (isNaN(requestedAmount) || requestedAmount <= 0) {
+      const card = createStatusCard({
+        title: "🔫 AMMO MAGAZINE",
+        rows: [
+          { label: "👤 PLAYER", value: ctx.message.from.first_name },
+          { label: "🔋 AMMO", value: `${user.ammo ?? 0} rounds` },
+          { label: "💰 CASH", value: `₹${user.balance}` },
+          { label: "🏷️ UNIT PRICE", value: `₹${BULLET_PRICE} / round` },
+        ],
+        footer: "💡 HINT • Purchase rounds using /b [amount]",
+      });
+
+      await sendMessage(ctx.chatId, card);
+      return;
+    }
+
+    const totalCost = requestedAmount * BULLET_PRICE;
+    if (user.balance < totalCost) {
+      await sendMessage(
+        ctx.chatId,
+        `❌ Insufficient funds. <b>${requestedAmount}</b> rounds cost <b>₹${totalCost}</b>, but you have <b>₹${user.balance}</b>.`
+      );
+      return;
+    }
+
+    const updatedBalance = user.balance - totalCost;
+    const updatedAmmo = (user.ammo ?? 0) + requestedAmount;
+
+    await ctx.env.DB.prepare("UPDATE users SET balance = ?, ammo = ? WHERE user_id = ?")
+      .bind(updatedBalance, updatedAmmo, ctx.userId)
+      .run();
+
+    const receiptCard = createStatusCard({
+      title: "📦 AMMO RESTOCKED",
+      rows: [
+        { label: "👤 BUYER", value: ctx.message.from.first_name },
+        { label: "📦 PURCHASED", value: `+${requestedAmount} rounds` },
+        { label: "💰 TOTAL COST", value: `₹${totalCost}` },
+        { label: "🔋 NEW AMMO", value: `${updatedAmmo} rounds` },
+        { label: "💼 CASH REMAINING", value: `₹${updatedBalance}` },
+      ],
+      footer: "⚡ Munitions loaded into primary magazine.",
+    });
+
+    await sendMessage(ctx.chatId, receiptCard);
+  },
+
+  "/bullets": async (ctx: BotContext) => {
+    await vaultHandlers["/b"](ctx);
+  },
 
   // ==========================================
   // 🎁 /daily - Claim Daily Allowance (₹1,000)
