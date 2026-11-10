@@ -115,7 +115,7 @@ export const combatHandlers: Record<string, CommandHandler> = {
       if (target.protected_until && target.protected_until > now) {
         await sendMessage(
           ctx.chatId,
-          `🛡️ <b>Attack Blocked</b>\n\n${targetName} is protected by safe immunity.`,
+          `🛡️ <b>Attack Blocked</b>\n\n${targetName} is protected by safe.`,
           undefined,
           ctx.message?.message_id
         );
