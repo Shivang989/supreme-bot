@@ -332,71 +332,97 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   },
 
   // ==========================================
-  // 🔫 /bal or /bullets - Check Ammo & Restock
+  // 💰 /bal or /balance - Simplified Player Profile
   // ==========================================
   "/bal": async (ctx: BotContext) => {
-    await vaultHandlers["/b"](ctx);
-  },
-  "/balance": async (ctx: BotContext) => {
-    await vaultHandlers["/b"](ctx);
-  },
+    try {
+      const reply = ctx.reply;
 
-  "/b": async (ctx: BotContext) => {
-    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    if (!user) return;
+      // ----------------------------------------------------
+      // Behaviour B: Replying to another player's message
+      // ----------------------------------------------------
+      if (reply) {
+        // Validate identifiable Telegram user (not a bot, not an anonymous channel)
+        if (!reply.from || reply.from.is_bot) {
+          await sendMessage(
+            ctx.chatId,
+            "❌ Unable to identify this player.",
+            undefined,
+            ctx.message?.message_id
+          );
+          return;
+        }
 
-    const requestedAmount = parseInt(ctx.args[0]);
+        const targetId = reply.from.id;
 
-    if (isNaN(requestedAmount) || requestedAmount <= 0) {
-      const card = createStatusCard({
-        title: "🔫 AMMO MAGAZINE",
-        rows: [
-          { label: "👤 PLAYER", value: ctx.message.from.first_name },
-          { label: "🔋 AMMO", value: `${user.ammo ?? 0} rounds` },
-          { label: "💰 CASH", value: `₹${user.balance}` },
-          { label: "🏷️ UNIT PRICE", value: `₹${BULLET_PRICE} / round` },
-        ],
-        footer: "💡 HINT • Purchase rounds using /b [amount]",
-      });
+        // If user replies to their own message, fall through to Behaviour A
+        if (targetId !== ctx.userId) {
+          const targetUser = await DB_MANAGER.getUser(ctx.env.DB, targetId);
 
-      await sendMessage(ctx.chatId, card);
-      return;
-    }
+          if (!targetUser) {
+            await sendMessage(
+              ctx.chatId,
+              "❌ Player profile not found.",
+              undefined,
+              ctx.message?.message_id
+            );
+            return;
+          }
 
-    const totalCost = requestedAmount * BULLET_PRICE;
-    if (user.balance < totalCost) {
+          const targetName = (reply.from.first_name || "Player")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+          const responseText =
+            `💰 <b>Player Profile</b>\n\n` +
+            `👤 Name: ${targetName}\n` +
+            `💵 Balance: ₹${targetUser.balance ?? 0}\n` +
+            `☠️ Kills: ${targetUser.kills ?? 0}`;
+
+          await sendMessage(ctx.chatId, responseText, undefined, ctx.message?.message_id);
+          return;
+        }
+      }
+
+      // ----------------------------------------------------
+      // Behaviour A: Own profile (independent command or self-reply)
+      // ----------------------------------------------------
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+      const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+
+      const senderName = (ctx.message.from.first_name || "Player")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      const balance = user?.balance ?? 0;
+      const kills = user?.kills ?? 0;
+      const bulletsLeft = user?.ammo ?? 0;
+
+      const profileText =
+        `💰 <b>Player Profile</b>\n\n` +
+        `👤 Name: ${senderName}\n` +
+        `💵 Balance: ₹${balance}\n` +
+        `☠️ Kills: ${kills}\n` +
+        `🔫 Bullets: ${bulletsLeft}`;
+
+      await sendMessage(ctx.chatId, profileText, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Error executing /bal:", err);
       await sendMessage(
         ctx.chatId,
-        `❌ Insufficient funds. <b>${requestedAmount}</b> rounds cost <b>₹${totalCost}</b>, but you have <b>₹${user.balance}</b>.`
+        `⚠️ <code>${err?.message || "Execution error"}</code>`,
+        undefined,
+        ctx.message?.message_id
       );
-      return;
     }
-
-    const updatedBalance = user.balance - totalCost;
-    const updatedAmmo = (user.ammo ?? 0) + requestedAmount;
-
-    await ctx.env.DB.prepare("UPDATE users SET balance = ?, ammo = ? WHERE user_id = ?")
-      .bind(updatedBalance, updatedAmmo, ctx.userId)
-      .run();
-
-    const receiptCard = createStatusCard({
-      title: "📦 AMMO RESTOCKED",
-      rows: [
-        { label: "👤 BUYER", value: ctx.message.from.first_name },
-        { label: "📦 PURCHASED", value: `+${requestedAmount} rounds` },
-        { label: "💰 TOTAL COST", value: `₹${totalCost}` },
-        { label: "🔋 NEW AMMO", value: `${updatedAmmo} rounds` },
-        { label: "💼 CASH REMAINING", value: `₹${updatedBalance}` },
-      ],
-      footer: "⚡ Munitions loaded into primary magazine.",
-    });
-
-    await sendMessage(ctx.chatId, receiptCard);
   },
 
-  "/bullets": async (ctx: BotContext) => {
-    await vaultHandlers["/b"](ctx);
+  "/balance": async (ctx: BotContext) => {
+    await vaultHandlers["/bal"](ctx);
   },
+
 
   // ==========================================
   // 🎁 /daily - Claim Daily Allowance (₹1,000)
