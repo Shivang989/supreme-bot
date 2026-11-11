@@ -68,10 +68,11 @@ export const combatHandlers: Record<string, CommandHandler> = {
         return;
       }
 
+      // Case C: Zero bullets check
       if ((attacker.ammo ?? 0) <= 0) {
         await sendMessage(
           ctx.chatId,
-          "❌ <b>No Bullets Left</b>\n\nYou have no bullets remaining.",
+          '❌ No bullets left. Use "/buy <amount>" to purchase bullets.',
           undefined,
           ctx.message?.message_id
         );
@@ -110,22 +111,9 @@ export const combatHandlers: Record<string, CommandHandler> = {
         return;
       }
 
-      // Check active /safe protection
-      const now = Math.floor(Date.now() / 1000);
-      if (target.protected_until && target.protected_until > now) {
-        await sendMessage(
-          ctx.chatId,
-          `🛡️ <b>Attack Blocked</b>\n\n${targetName} is protected by safe.`,
-          undefined,
-          ctx.message?.message_id
-        );
-        return;
-      }
-
       // ----------------------------------------------------
-      // Atomic Execution: Deduct bullet, Eliminate, & Reward
+      // Step 1: Consume 1 bullet atomically for valid attack attempt
       // ----------------------------------------------------
-      // 1. Consume exactly one bullet atomically
       const bulletDeductResult = await ctx.env.DB.prepare(
         "UPDATE users SET ammo = ammo - 1 WHERE user_id = ? AND ammo >= 1"
       )
@@ -138,25 +126,53 @@ export const combatHandlers: Record<string, CommandHandler> = {
       if (!bulletDeducted) {
         await sendMessage(
           ctx.chatId,
-          "❌ <b>No Bullets Left</b>\n\nYou have no bullets remaining.",
+          '❌ No bullets left. Use "/buy <amount>" to purchase bullets.',
           undefined,
           ctx.message?.message_id
         );
         return;
       }
 
-      // 2. Eliminate target (ensures no race condition with another shooter)
+      // ----------------------------------------------------
+      // Case B: Target has active /safe protection
+      // Bullet stays consumed; target is NOT eliminated; no reward given
+      // ----------------------------------------------------
+      const now = Math.floor(Date.now() / 1000);
+      if (target.protected_until && target.protected_until > now) {
+        const protectedText =
+          `🛡️ <b>Target Protected</b>\n\n` +
+          `Your bullet was used, but protection prevented the elimination.`;
+
+        await sendMessage(ctx.chatId, protectedText, undefined, ctx.message?.message_id);
+        return;
+      }
+
+      // ----------------------------------------------------
+      // Case A: Unprotected Target -> Eliminate & Award ₹200–₹300
+      // ----------------------------------------------------
       const eliminateResult = await ctx.env.DB.prepare(
-        "UPDATE users SET is_alive = 0 WHERE user_id = ? AND is_alive = 1"
+        "UPDATE users SET is_alive = 0 WHERE user_id = ? AND is_alive = 1 AND (protected_until IS NULL OR protected_until <= ?)"
       )
-        .bind(targetId)
+        .bind(targetId, now)
         .run();
 
       const targetEliminated =
         (eliminateResult.meta?.changes ?? eliminateResult.meta?.rows_written ?? 0) > 0;
 
       if (!targetEliminated) {
-        // Rollback bullet deduction if target was already eliminated in a concurrent command
+        // Re-check if target became protected vs already eliminated in a concurrent race
+        const freshTarget = await DB_MANAGER.getUser(ctx.env.DB, targetId);
+        if (freshTarget?.protected_until && freshTarget.protected_until > now) {
+          await sendMessage(
+            ctx.chatId,
+            `🛡️ <b>Target Protected</b>\n\nYour bullet was used, but protection prevented the elimination.`,
+            undefined,
+            ctx.message?.message_id
+          );
+          return;
+        }
+
+        // Target was already eliminated concurrently -> refund bullet
         await ctx.env.DB.prepare(
           "UPDATE users SET ammo = ammo + 1 WHERE user_id = ?"
         )
@@ -172,17 +188,18 @@ export const combatHandlers: Record<string, CommandHandler> = {
         return;
       }
 
-      // 3. Generate random integer reward between ₹200 and ₹300 (inclusive)
+      // Generate random integer reward between ₹200 and ₹300 (inclusive)
       const reward = Math.floor(Math.random() * (300 - 200 + 1)) + 200;
 
-      // 4. Credit reward and increment kills
+      // Credit reward and increment kills
       await ctx.env.DB.prepare(
         "UPDATE users SET balance = balance + ?, kills = kills + 1 WHERE user_id = ?"
       )
         .bind(reward, ctx.userId)
         .run();
 
-      const remainingBullets = Math.max(0, (attacker.ammo ?? 0) - 1);
+      const updatedAttacker = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      const remainingBullets = updatedAttacker?.ammo ?? Math.max(0, (attacker.ammo ?? 0) - 1);
 
       const resultText =
         `🔫 <b>Target Eliminated</b>\n\n` +

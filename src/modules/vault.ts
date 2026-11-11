@@ -5,7 +5,8 @@ import { MUSCLE } from "../muscle";
 import { createStatusCard } from "../ui";
 import { sendMessage, answerCallbackQuery } from "../index";
 
-const BULLET_PRICE = 10; // Cost per ammo round in ₹
+const BULLET_PRICE = 1; // 1 Bullet = ₹1
+const MAX_BULLET_PURCHASE = 1000000; // Safe upper bound against integer overflow
 
 export const SAFE_CONFIG: Record<number, { durationSec: number; price: number; label: string }> = {
   1: { durationSec: 86400, price: 300, label: "1 day" },
@@ -158,6 +159,82 @@ export async function activateSafeProtection(
       `Your balance is now protected from robbery.`,
   };
 }
+
+
+/**
+ * Shared Bullet Purchase Service
+ */
+export async function purchaseBullets(
+  env: CloudflareEnv,
+  userId: number,
+  quantity: number
+): Promise<{ ok: boolean; message: string }> {
+  if (!Number.isInteger(quantity) || quantity <= 0 || quantity > MAX_BULLET_PURCHASE) {
+    return {
+      ok: false,
+      message:
+        `💰 <b>Buy Bullets</b>\n\n` +
+        `1 Bullet = ₹1\n\n` +
+        `Use "/buy &lt;amount&gt;" to purchase bullets.\n\n` +
+        `Example: "/buy 100" — Buy 100 bullets for ₹100.`,
+    };
+  }
+
+  await DB_MANAGER.ensureUserExists(env.DB, userId);
+  const user = await DB_MANAGER.getUser(env.DB, userId);
+  if (!user) return { ok: false, message: "⚠️ User profile not found." };
+
+  const cost = quantity * BULLET_PRICE;
+  const currentBalance = user.balance ?? 0;
+
+  if (currentBalance < cost) {
+    return {
+      ok: false,
+      message:
+        `❌ <b>Insufficient Balance</b>\n\n` +
+        `Required: ₹${cost}\n` +
+        `Your balance: ₹${currentBalance}\n\n` +
+        `No bullets purchased.`,
+    };
+  }
+
+  // Atomic deduction and inventory addition
+  const updateResult = await env.DB.prepare(
+    `UPDATE users
+     SET balance = balance - ?, ammo = COALESCE(ammo, 0) + ?
+     WHERE user_id = ? AND balance >= ?`
+  )
+    .bind(cost, quantity, userId, cost)
+    .run();
+
+  const changes = updateResult.meta?.changes ?? updateResult.meta?.rows_written ?? 0;
+  if (changes === 0) {
+    const freshUser = await DB_MANAGER.getUser(env.DB, userId);
+    return {
+      ok: false,
+      message:
+        `❌ <b>Insufficient Balance</b>\n\n` +
+        `Required: ₹${cost}\n` +
+        `Your balance: ₹${freshUser?.balance ?? 0}\n\n` +
+        `No bullets purchased.`,
+    };
+  }
+
+  const updatedUser = await DB_MANAGER.getUser(env.DB, userId);
+  const newBullets = updatedUser?.ammo ?? (user.ammo ?? 0) + quantity;
+  const newBalance = updatedUser?.balance ?? currentBalance - cost;
+
+  return {
+    ok: true,
+    message:
+      `💰 <b>Purchase Successful</b>\n\n` +
+      `Bullets purchased: ${quantity}\n` +
+      `Amount paid: ₹${cost}\n` +
+      `Total bullets: ${newBullets}\n` +
+      `Remaining balance: ₹${newBalance}`,
+  };
+}
+
 
 /**
  * Handle Inline Button Callbacks for /safe in DM
@@ -500,65 +577,60 @@ export const vaultHandlers: Record<string, CommandHandler> = {
     await vaultHandlers["/bal"](ctx);
   },
 
+
   // ==========================================
-  // 🔫 /b or /bullets - Check Ammo & Purchase
+  // 💰 /buy - Purchase Bullets (1 Bullet = ₹1)
   // ==========================================
-  "/b": async (ctx: BotContext) => {
-    const user = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    if (!user) return;
+  "/buy": async (ctx: BotContext) => {
+    try {
+      const guideText =
+        `💰 <b>Buy Bullets</b>\n\n` +
+        `1 Bullet = ₹1\n\n` +
+        `Use "/buy &lt;amount&gt;" to purchase bullets.\n\n` +
+        `Example: "/buy 100" — Buy 100 bullets for ₹100.`;
 
-    const requestedAmount = parseInt(ctx.args[0]);
+      // Behaviour A: No amount provided
+      if (ctx.args.length === 0) {
+        await sendMessage(ctx.chatId, guideText, undefined, ctx.message?.message_id);
+        return;
+      }
 
-    if (isNaN(requestedAmount) || requestedAmount <= 0) {
-      const card = createStatusCard({
-        title: "🔫 AMMO MAGAZINE",
-        rows: [
-          { label: "👤 PLAYER", value: ctx.message.from.first_name },
-          { label: "🔋 AMMO", value: `${user.ammo ?? 0} rounds` },
-          { label: "💰 CASH", value: `₹${user.balance}` },
-          { label: "🏷️ UNIT PRICE", value: `₹${BULLET_PRICE} / round` },
-        ],
-        footer: "💡 HINT • Purchase rounds using /b [amount]",
-      });
+      // Reject multiple arguments or non-integer strings (e.g., decimals, negative, text)
+      if (ctx.args.length > 1 || !/^\d+$/.test(ctx.args[0].trim())) {
+        await sendMessage(
+          ctx.chatId,
+          '❌ Invalid amount. Use "/buy <amount>" with a positive whole number.',
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
 
-      await sendMessage(ctx.chatId, card);
-      return;
-    }
+      const quantity = parseInt(ctx.args[0].trim(), 10);
+      if (isNaN(quantity) || quantity <= 0 || quantity > MAX_BULLET_PURCHASE) {
+        await sendMessage(
+          ctx.chatId,
+          '❌ Invalid amount. Use "/buy <amount>" with a positive whole number.',
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
 
-    const totalCost = requestedAmount * BULLET_PRICE;
-    if (user.balance < totalCost) {
+      // Behaviour B: Purchase directly for command sender (ignores any reply context)
+      const res = await purchaseBullets(ctx.env, ctx.userId, quantity);
+      await sendMessage(ctx.chatId, res.message, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Error executing /buy:", err);
       await sendMessage(
         ctx.chatId,
-        `❌ Insufficient funds. <b>${requestedAmount}</b> rounds cost <b>₹${totalCost}</b>, but you have <b>₹${user.balance}</b>.`
+        `⚠️ <code>${err?.message || "Execution error"}</code>`,
+        undefined,
+        ctx.message?.message_id
       );
-      return;
     }
-
-    const updatedBalance = user.balance - totalCost;
-    const updatedAmmo = (user.ammo ?? 0) + requestedAmount;
-
-    await ctx.env.DB.prepare("UPDATE users SET balance = ?, ammo = ? WHERE user_id = ?")
-      .bind(updatedBalance, updatedAmmo, ctx.userId)
-      .run();
-
-    const receiptCard = createStatusCard({
-      title: "📦 AMMO RESTOCKED",
-      rows: [
-        { label: "👤 BUYER", value: ctx.message.from.first_name },
-        { label: "📦 PURCHASED", value: `+${requestedAmount} rounds` },
-        { label: "💰 TOTAL COST", value: `₹${totalCost}` },
-        { label: "🔋 NEW AMMO", value: `${updatedAmmo} rounds` },
-        { label: "💼 CASH REMAINING", value: `₹${updatedBalance}` },
-      ],
-      footer: "⚡ Munitions loaded into primary magazine.",
-    });
-
-    await sendMessage(ctx.chatId, receiptCard);
   },
 
-  "/bullets": async (ctx: BotContext) => {
-    await vaultHandlers["/b"](ctx);
-  },
 
   // ==========================================
   // 🎁 /daily - Claim Daily Allowance (₹1,000)
