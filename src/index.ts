@@ -3,6 +3,19 @@ import { handleMessage } from "./router";
 import { CONFIG } from "./config";
 import { BROADCAST_ENGINE } from "./modules/broadcastEngine";
 
+let runtimeBotToken = "";
+
+export function setRuntimeBotToken(token: string): void {
+  if (token) runtimeBotToken = token;
+}
+
+function getBotToken(): string {
+  return (
+    runtimeBotToken ||
+    (typeof process !== "undefined" ? process.env?.BOT_TOKEN || "" : "") ||
+    CONFIG.BOT_TOKEN
+  );
+}
 
 export async function editMessageText(
   chatId: number,
@@ -18,7 +31,7 @@ export async function editMessageText(
   };
   if (replyMarkup) payload.reply_markup = replyMarkup;
 
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/editMessageText`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/editMessageText`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -30,7 +43,7 @@ export async function editMessageReplyMarkup(
   messageId: number,
   replyMarkup?: Record<string, any>
 ): Promise<Response> {
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/editMessageReplyMarkup`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/editMessageReplyMarkup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -55,7 +68,7 @@ export async function sendPhoto(
   if (caption) payload.caption = caption;
   if (replyMarkup) payload.reply_markup = replyMarkup;
 
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendPhoto`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/sendPhoto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -76,7 +89,7 @@ export async function sendVideo(
   if (caption) payload.caption = caption;
   if (replyMarkup) payload.reply_markup = replyMarkup;
 
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendVideo`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/sendVideo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -103,7 +116,7 @@ export async function sendMessage(
     payload.reply_parameters = { message_id: replyToMessageId };
   }
 
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendMessage`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -115,7 +128,7 @@ export async function answerCallbackQuery(
   text?: string,
   showAlert: boolean = false
 ): Promise<Response> {
-  return fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/answerCallbackQuery`, {
+  return fetch(`https://api.telegram.org/bot${getBotToken()}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -126,11 +139,14 @@ export async function answerCallbackQuery(
   });
 }
 
+// Cloudflare Worker Entrypoint (Preserved for safe cutover & instant rollback)
 export default {
   async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext): Promise<Response> {
+    if (env.BOT_TOKEN) setRuntimeBotToken(env.BOT_TOKEN);
+
     if (request.method === "POST") {
       try {
-        const update = (await request.json()) as any;
+        const update = (await request.json()) as TelegramUpdate;
         ctx.waitUntil(handleMessage(update, env));
         return new Response("OK", { status: 200 });
       } catch (err) {
@@ -142,9 +158,7 @@ export default {
   },
 
   async scheduled(event: ScheduledEvent, env: CloudflareEnv, ctx: ExecutionContext): Promise<void> {
+    if (env.BOT_TOKEN) setRuntimeBotToken(env.BOT_TOKEN);
     ctx.waitUntil(BROADCAST_ENGINE.runContinuousWorker(env.DB, 25000));
   },
 };
-
-
-// ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END

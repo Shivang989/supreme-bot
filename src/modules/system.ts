@@ -22,7 +22,10 @@ async function sendAnimation(
   caption?: string,
   replyMarkup?: any
 ): Promise<any> {
-  const res = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendAnimation`, {
+  const token =
+    (typeof process !== "undefined" && process.env?.BOT_TOKEN) || CONFIG.BOT_TOKEN;
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendAnimation`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

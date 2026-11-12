@@ -3,20 +3,25 @@
 // ╰━━━━━━━━━━━━━━━✪
 // Yahan humare saare secret tokens, variables aur designs rahenge.
 
-import { MarketItem } from './types';
+import { MarketItem } from "./types";
+
+const envToken = typeof process !== "undefined" && process.env?.BOT_TOKEN ? process.env.BOT_TOKEN : "";
+const envOwnerId =
+  typeof process !== "undefined" && process.env?.OWNER_ID
+    ? parseInt(process.env.OWNER_ID, 10)
+    : 8210345021;
 
 export const CONFIG = {
-  BOT_TOKEN: "8814322867:AAFT0zdEohAeQb_21mDOWyXK54A6uBUnoCo", 
+  BOT_TOKEN: envToken,
   STARTING_BALANCE: 1000,
   MARKET_UPDATE_INTERVAL: 300,
-  OWNER_ID: 8210345021 // 👑 Supreme Boss (You)
+  OWNER_ID: envOwnerId,
 };
-
 
 export const UI = {
   BORDER_TOP: "╭━━━━━━━━━━━━━━━✪",
   BORDER_BOT: "╰━━━━━━━━━━━━━━━✪",
-  DIVIDER:    "┣━━━━━━━━━━━━━━━✪",
+  DIVIDER: "┣━━━━━━━━━━━━━━━✪",
 };
 
 export const EMOJIS = {
@@ -26,15 +31,20 @@ export const EMOJIS = {
   alive: "🟢",
   money: "💰",
   gun: "🔫",
-  vault: "🎒"
+  vault: "🎒",
 };
 
 export const MARKET_ITEMS: Record<string, MarketItem> = {
-  "cheap_watch": { base_price: 100, volatility: 0.3, emoji: "⌚", name: "Cheap Watch" },
-  "stolen_phone": { base_price: 500, volatility: 0.4, emoji: "📱", name: "Stolen Phone" },
-  "gold_chain": { base_price: 1000, volatility: 0.5, emoji: "⛓️", name: "Gold Chain" },
-  "crypto_wallet": { base_price: 5000, volatility: 0.8, emoji: "💻", name: "Crypto Wallet" },
-  "classified_documents": { base_price: 10000, volatility: 0.9, emoji: "📁", name: "Classified Docs" }
+  cheap_watch: { base_price: 100, volatility: 0.3, emoji: "⌚", name: "Cheap Watch" },
+  stolen_phone: { base_price: 500, volatility: 0.4, emoji: "📱", name: "Stolen Phone" },
+  gold_chain: { base_price: 1000, volatility: 0.5, emoji: "⛓️", name: "Gold Chain" },
+  crypto_wallet: { base_price: 5000, volatility: 0.8, emoji: "💻", name: "Crypto Wallet" },
+  classified_documents: {
+    base_price: 10000,
+    volatility: 0.9,
+    emoji: "📁",
+    name: "Classified Docs",
+  },
 };
 
 // ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
