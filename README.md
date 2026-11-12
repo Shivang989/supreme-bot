@@ -1,5 +1,5 @@
 ---
-title: Aloo Bot
+title: aloobott
 emoji: 🥔
 colorFrom: yellow
 colorTo: green
