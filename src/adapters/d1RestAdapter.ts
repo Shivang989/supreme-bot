@@ -82,7 +82,7 @@ export function createD1RestAdapter(config: D1RestConfig): D1Database {
         const res = await executeQuery<T>(sql, boundParams);
         return {
           results: res.results,
-          success: res.success,
+          success: true,
           meta: res.meta as any,
         };
       },
@@ -91,7 +91,7 @@ export function createD1RestAdapter(config: D1RestConfig): D1Database {
         const res = await executeQuery<T>(sql, boundParams);
         return {
           results: res.results,
-          success: res.success,
+          success: true,
           meta: res.meta as any,
         };
       },
