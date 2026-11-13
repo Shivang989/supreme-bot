@@ -22,10 +22,7 @@ async function sendAnimation(
   caption?: string,
   replyMarkup?: any
 ): Promise<any> {
-  const token =
-    (typeof process !== "undefined" && process.env?.BOT_TOKEN) || CONFIG.BOT_TOKEN;
-
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendAnimation`, {
+  const res = await fetch(`https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/sendAnimation`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -38,6 +35,7 @@ async function sendAnimation(
   });
   return await res.json();
 }
+
 
 // Group Welcome (Unmodified)
 export async function handleWelcome(

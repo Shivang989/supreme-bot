@@ -13,11 +13,7 @@ export function setRuntimeBotToken(token: string): void {
 }
 
 function getBotToken(): string {
-  return (
-    runtimeBotToken ||
-    (typeof process !== "undefined" ? process.env?.BOT_TOKEN || "" : "") ||
-    CONFIG.BOT_TOKEN
-  );
+  return runtimeBotToken || CONFIG.BOT_TOKEN;
 }
 
 export async function editMessageText(

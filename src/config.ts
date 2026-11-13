@@ -5,17 +5,11 @@
 
 import { MarketItem } from "./types";
 
-const envToken = typeof process !== "undefined" && process.env?.BOT_TOKEN ? process.env.BOT_TOKEN : "";
-const envOwnerId =
-  typeof process !== "undefined" && process.env?.OWNER_ID
-    ? parseInt(process.env.OWNER_ID, 10)
-    : 8210345021;
-
 export const CONFIG = {
-  BOT_TOKEN: envToken,
+  BOT_TOKEN: "", // Injected at runtime from Cloudflare secret env.BOT_TOKEN
   STARTING_BALANCE: 1000,
   MARKET_UPDATE_INTERVAL: 300,
-  OWNER_ID: envOwnerId,
+  OWNER_ID: 8210345021,
 };
 
 export const UI = {
