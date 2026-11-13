@@ -6,7 +6,10 @@ import { BROADCAST_ENGINE } from "./modules/broadcastEngine";
 let runtimeBotToken = "";
 
 export function setRuntimeBotToken(token: string): void {
-  if (token) runtimeBotToken = token;
+  if (token) {
+    runtimeBotToken = token;
+    CONFIG.BOT_TOKEN = token;
+  }
 }
 
 function getBotToken(): string {
