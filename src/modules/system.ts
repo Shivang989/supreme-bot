@@ -67,10 +67,14 @@ export async function handleWelcome(
 }
 
 
-async function resolvePlayerName(env: CloudflareEnv, player: any): Promise<string> {
+async function resolvePlayerName(
+  env: CloudflareEnv,
+  player: any,
+  chatId?: number
+): Promise<string> {
   let rawName: string | undefined = player?.first_name || player?.name;
 
-  // 1. Check cached user record from broadcast registry if available
+  // 1. Check cached name in broadcast_users
   if (!rawName) {
     try {
       const cached = await env.DB.prepare(
@@ -86,7 +90,22 @@ async function resolvePlayerName(env: CloudflareEnv, player: any): Promise<strin
     }
   }
 
-  // 2. Fallback to Telegram getChat API for live display name
+  // 2. Check group member info via getChatMember (works for any group member even without DM)
+  if (!rawName && chatId && chatId < 0) {
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/getChatMember?chat_id=${chatId}&user_id=${player.user_id}`
+      );
+      const data: any = await res.json();
+      if (data?.ok && data.result?.user?.first_name) {
+        rawName = data.result.user.first_name;
+      }
+    } catch {
+      // Ignore lookup failure
+    }
+  }
+
+  // 3. Fallback to Telegram getChat API
   if (!rawName) {
     try {
       const res = await fetch(
@@ -97,7 +116,27 @@ async function resolvePlayerName(env: CloudflareEnv, player: any): Promise<strin
         rawName = data.result.first_name;
       }
     } catch {
-      // Ignore network/API lookup failure
+      // Ignore lookup failure
+    }
+  }
+
+  // 4. Cache the resolved name in D1 for future leaderboard calls
+  if (rawName) {
+    try {
+      const upd = await env.DB.prepare(
+        "UPDATE broadcast_users SET first_name = ? WHERE user_id = ?"
+      )
+        .bind(rawName, player.user_id)
+        .run();
+      if ((upd.meta?.changes ?? 0) === 0) {
+        await env.DB.prepare(
+          "INSERT OR IGNORE INTO broadcast_users (user_id, first_name) VALUES (?, ?)"
+        )
+          .bind(player.user_id, rawName)
+          .run();
+      }
+    } catch {
+      // Ignore cache write errors
     }
   }
 
@@ -107,7 +146,6 @@ async function resolvePlayerName(env: CloudflareEnv, player: any): Promise<strin
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
-
 
 
 export const systemHandlers: Record<string, CommandHandler> = {
@@ -211,6 +249,26 @@ export const systemHandlers: Record<string, CommandHandler> = {
   },
 
   "/top": async (ctx: BotContext) => {
+    // Cache the command sender's current first_name so they never show as "Player"
+    if (ctx.message?.from?.first_name) {
+      try {
+        const upd = await ctx.env.DB.prepare(
+          "UPDATE broadcast_users SET first_name = ? WHERE user_id = ?"
+        )
+          .bind(ctx.message.from.first_name, ctx.userId)
+          .run();
+        if ((upd.meta?.changes ?? 0) === 0) {
+          await ctx.env.DB.prepare(
+            "INSERT OR IGNORE INTO broadcast_users (user_id, first_name) VALUES (?, ?)"
+          )
+            .bind(ctx.userId, ctx.message.from.first_name)
+            .run();
+        }
+      } catch {
+        // Ignore if table schema differs
+      }
+    }
+
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
     if (!topPlayers || topPlayers.length === 0) {
       await sendMessage(ctx.chatId, "🏆 <b>No players registered yet.</b>");
@@ -220,7 +278,7 @@ export const systemHandlers: Record<string, CommandHandler> = {
     const medals = ["🥇", "🥈", "🥉"];
     const lines = await Promise.all(
       topPlayers.map(async (p, idx) => {
-        const name = await resolvePlayerName(ctx.env, p);
+        const name = await resolvePlayerName(ctx.env, p, ctx.chatId);
         const rank = medals[idx] || `${idx + 1}.`;
         const mention = `<a href="tg://user?id=${p.user_id}">${name}</a>`;
         return `${rank} ${mention} — ₹${p.balance ?? 0}`;

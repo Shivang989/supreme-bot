@@ -834,9 +834,9 @@ export const vaultHandlers: Record<string, CommandHandler> = {
         .replace(/>/g, "&gt;");
 
       const sentText =
-        `💸 <b>Money Sent</b>\n\n` +
+        `💸 <b>Money Sent</b>  ₹${amount}\n\n` +
         `👤 ${senderName} → ${targetName}\n` +
-        `💰 Sent ₹${amount}  •  💼 ₹${newBalance}`;
+        ` •  💼 ₹${newBalance}`;
 
       await sendMessage(ctx.chatId, sentText, undefined, ctx.message?.message_id);
     } catch (err: any) {
