@@ -66,6 +66,50 @@ export async function handleWelcome(
   }
 }
 
+
+async function resolvePlayerName(env: CloudflareEnv, player: any): Promise<string> {
+  let rawName: string | undefined = player?.first_name || player?.name;
+
+  // 1. Check cached user record from broadcast registry if available
+  if (!rawName) {
+    try {
+      const cached = await env.DB.prepare(
+        "SELECT first_name FROM broadcast_users WHERE user_id = ?"
+      )
+        .bind(player.user_id)
+        .first<{ first_name?: string }>();
+      if (cached?.first_name) {
+        rawName = cached.first_name;
+      }
+    } catch {
+      // Ignore if table/column is absent
+    }
+  }
+
+  // 2. Fallback to Telegram getChat API for live display name
+  if (!rawName) {
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${CONFIG.BOT_TOKEN}/getChat?chat_id=${player.user_id}`
+      );
+      const data: any = await res.json();
+      if (data?.ok && data.result?.first_name) {
+        rawName = data.result.first_name;
+      }
+    } catch {
+      // Ignore network/API lookup failure
+    }
+  }
+
+  const clean = (rawName || "Player").trim();
+  return clean
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+
+
 export const systemHandlers: Record<string, CommandHandler> = {
   // /start handler
   "/start": async (ctx: BotContext) => {
@@ -169,17 +213,26 @@ export const systemHandlers: Record<string, CommandHandler> = {
   "/top": async (ctx: BotContext) => {
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
     if (!topPlayers || topPlayers.length === 0) {
-      await sendMessage(ctx.chatId, "🏆 <b>No active operatives registered.</b>");
+      await sendMessage(ctx.chatId, "🏆 <b>No players registered yet.</b>");
       return;
     }
-    let report = "🏆 <b>SYNDICATE LEADERBOARD</b>\n\n";
-    topPlayers.forEach((p, idx) => {
-      report += `${idx + 1}. <b>UID:</b> <code>${p.user_id}</code> • <b>Cash:</b> ₹${p.balance}\n`;
-    });
-    await sendMessage(ctx.chatId, report);
+
+    const medals = ["🥇", "🥈", "🥉"];
+    const lines = await Promise.all(
+      topPlayers.map(async (p, idx) => {
+        const name = await resolvePlayerName(ctx.env, p);
+        const rank = medals[idx] || `${idx + 1}.`;
+        const mention = `<a href="tg://user?id=${p.user_id}">${name}</a>`;
+        return `${rank} ${mention} — ₹${p.balance ?? 0}`;
+      })
+    );
+
+    const report = `🏆 <b>LEADERBOARD</b>\n\n${lines.join("\n")}`;
+    await sendMessage(ctx.chatId, report, undefined, ctx.message?.message_id);
   },
 
   "/leaderboard": async (ctx: BotContext) => {
     await systemHandlers["/top"](ctx);
   },
+
 };

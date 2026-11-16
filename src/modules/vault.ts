@@ -719,64 +719,141 @@ export const vaultHandlers: Record<string, CommandHandler> = {
   },
 
   // ==========================================
-  // 💸 /pay - Transfer Funds
+  // 💸 /pay & /give - Transfer Money by Reply
   // ==========================================
   "/pay": async (ctx: BotContext) => {
-    const sender = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
-    if (!sender) return;
+    try {
+      const reply = ctx.reply;
 
-    if (sender.is_alive === 0) {
-      await sendMessage(ctx.chatId, "💀 You are eliminated. Revive first using <code>/revive</code>.");
-      return;
-    }
+      // Show short usage guide when used without replying or without an amount
+      if (!reply || ctx.args.length === 0) {
+        const guideText =
+          `💸 <b>Send Money</b>\n\n` +
+          `Reply to a player's message with:\n` +
+          `<code>/pay &lt;amount&gt;</code> or <code>/give &lt;amount&gt;</code>`;
 
-    const amountArg = ctx.args.find((a: string) => !isNaN(parseInt(a)) && parseInt(a) > 0 && a.length <= 6);
-    const amount = amountArg ? parseInt(amountArg) : null;
+        await sendMessage(ctx.chatId, guideText, undefined, ctx.message?.message_id);
+        return;
+      }
 
-    if (!amount) {
+      if (!reply.from || reply.from.is_bot) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ Unable to identify this player.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const targetId = reply.from.id;
+      if (targetId === ctx.userId) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ You cannot send money to yourself.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      const rawAmount = ctx.args[0].trim();
+      const amount = parseInt(rawAmount, 10);
+      if (ctx.args.length > 1 || !/^\d+$/.test(rawAmount) || isNaN(amount) || amount <= 0) {
+        await sendMessage(
+          ctx.chatId,
+          '❌ Invalid amount. Reply with <code>/pay &lt;amount&gt;</code> or <code>/give &lt;amount&gt;</code>.',
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, ctx.userId);
+      const sender = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      if (!sender) return;
+
+      if (sender.is_alive === 0) {
+        await sendMessage(
+          ctx.chatId,
+          "💀 You are eliminated. Revive first using <code>/revive</code>.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      if ((sender.balance ?? 0) < amount) {
+        await sendMessage(
+          ctx.chatId,
+          `❌ <b>Insufficient Balance</b>\n\nRequired: ₹${amount}\nYour balance: ₹${sender.balance ?? 0}`,
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      await DB_MANAGER.ensureUserExists(ctx.env.DB, targetId);
+
+      // Atomic deduction from sender
+      const deductResult = await ctx.env.DB.prepare(
+        "UPDATE users SET balance = balance - ? WHERE user_id = ? AND balance >= ?"
+      )
+        .bind(amount, ctx.userId, amount)
+        .run();
+
+      const changes = deductResult.meta?.changes ?? deductResult.meta?.rows_written ?? 0;
+      if (changes === 0) {
+        await sendMessage(
+          ctx.chatId,
+          "❌ Transaction failed due to insufficient balance.",
+          undefined,
+          ctx.message?.message_id
+        );
+        return;
+      }
+
+      // Credit recipient
+      await ctx.env.DB.prepare(
+        "UPDATE users SET balance = balance + ? WHERE user_id = ?"
+      )
+        .bind(amount, targetId)
+        .run();
+
+      const updatedSender = await DB_MANAGER.getUser(ctx.env.DB, ctx.userId);
+      const newBalance = updatedSender?.balance ?? Math.max(0, (sender.balance ?? 0) - amount);
+
+      const senderName = (ctx.message.from.first_name || "Player")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      const targetName = (reply.from.first_name || "Player")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+      const sentText =
+        `💸 <b>Money Sent</b>\n\n` +
+        `👤 ${senderName} → ${targetName}\n` +
+        `💰 Sent ₹${amount}  •  💼 ₹${newBalance}`;
+
+      await sendMessage(ctx.chatId, sentText, undefined, ctx.message?.message_id);
+    } catch (err: any) {
+      console.error("Transfer command error:", err);
       await sendMessage(
         ctx.chatId,
-        "⚠️ <b>Usage:</b> Reply to a player or provide an ID: <code>/pay [amount]</code>"
+        `⚠️ <code>${err?.message || "Execution error"}</code>`,
+        undefined,
+        ctx.message?.message_id
       );
-      return;
     }
-
-    if (sender.balance < amount) {
-      await sendMessage(ctx.chatId, `❌ Insufficient balance to transfer <b>₹${amount}</b>.`);
-      return;
-    }
-
-    const { targetId, targetName } = resolveTarget(ctx);
-    if (!targetId) {
-      await sendMessage(ctx.chatId, "🎯 <b>Recipient Required:</b> Reply to a message or supply an ID.");
-      return;
-    }
-
-    if (targetId === ctx.userId) {
-      await sendMessage(ctx.chatId, "⚠️ You cannot transfer funds to yourself.");
-      return;
-    }
-
-    await DB_MANAGER.ensureUserExists(ctx.env.DB, targetId);
-    const recipient = await DB_MANAGER.getUser(ctx.env.DB, targetId);
-    if (!recipient) return;
-
-    await DB_MANAGER.updateBalance(ctx.env.DB, ctx.userId, sender.balance - amount);
-    await DB_MANAGER.updateBalance(ctx.env.DB, targetId, recipient.balance + amount);
-
-    const transferCard = createStatusCard({
-      title: "💸 WIRE TRANSFER",
-      rows: [
-        { label: "👤 SENDER", value: ctx.message.from.first_name },
-        { label: "🎯 RECIPIENT", value: targetName },
-        { label: "💰 AMOUNT", value: `₹${amount}` },
-        { label: "💼 NEW BALANCE", value: `₹${sender.balance - amount}` },
-      ],
-      footer: "⚡ Direct transfer verified and recorded on ledger.",
-    });
-
-    await sendMessage(ctx.chatId, transferCard);
   },
+
+  "/give": async (ctx: BotContext) => {
+    await vaultHandlers["/pay"](ctx);
+  },
+
 
   // ==========================================
   // 🎒 /inv or /inventory - Inventory Check
