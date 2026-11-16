@@ -97,8 +97,24 @@ export async function handleMessage(update: TelegramUpdate, env: CloudflareEnv):
     await BROADCAST_REGISTRY.trackGroupMember(env.DB, chatId, message.from);
   }
 
-  // Ensure user exists in core database
-  await DB_MANAGER.ensureUserExists(env.DB, userId);
+  // Ensure user exists in core database & keep first_name synced
+  await DB_MANAGER.ensureUserExists(env.DB, userId, message.from.first_name);
+
+  if (
+    message.reply_to_message?.from &&
+    !message.reply_to_message.from.is_bot &&
+    message.reply_to_message.from.first_name
+  ) {
+    const replyName = message.reply_to_message.from.first_name.trim();
+    if (replyName) {
+      await env.DB.prepare(
+        "UPDATE users SET first_name = ? WHERE user_id = ? AND (first_name IS NULL OR first_name != ?)"
+      )
+        .bind(replyName, message.reply_to_message.from.id, replyName)
+        .run();
+    }
+  }
+
 
   // 6. Welcome new members in groups
   const newMembers =

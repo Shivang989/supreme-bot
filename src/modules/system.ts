@@ -74,23 +74,7 @@ async function resolvePlayerName(
 ): Promise<string> {
   let rawName: string | undefined = player?.first_name || player?.name;
 
-  // 1. Check cached name in broadcast_users
-  if (!rawName) {
-    try {
-      const cached = await env.DB.prepare(
-        "SELECT first_name FROM broadcast_users WHERE user_id = ?"
-      )
-        .bind(player.user_id)
-        .first<{ first_name?: string }>();
-      if (cached?.first_name) {
-        rawName = cached.first_name;
-      }
-    } catch {
-      // Ignore if table/column is absent
-    }
-  }
-
-  // 2. Check group member info via getChatMember (works for any group member even without DM)
+  // Backfill for legacy players in DB who haven't sent a message since first_name column was added
   if (!rawName && chatId && chatId < 0) {
     try {
       const res = await fetch(
@@ -105,7 +89,6 @@ async function resolvePlayerName(
     }
   }
 
-  // 3. Fallback to Telegram getChat API
   if (!rawName) {
     try {
       const res = await fetch(
@@ -120,23 +103,14 @@ async function resolvePlayerName(
     }
   }
 
-  // 4. Cache the resolved name in D1 for future leaderboard calls
-  if (rawName) {
+  // Persist resolved name directly into the users table
+  if (rawName && !player?.first_name) {
     try {
-      const upd = await env.DB.prepare(
-        "UPDATE broadcast_users SET first_name = ? WHERE user_id = ?"
-      )
-        .bind(rawName, player.user_id)
+      await env.DB.prepare("UPDATE users SET first_name = ? WHERE user_id = ?")
+        .bind(rawName.trim(), player.user_id)
         .run();
-      if ((upd.meta?.changes ?? 0) === 0) {
-        await env.DB.prepare(
-          "INSERT OR IGNORE INTO broadcast_users (user_id, first_name) VALUES (?, ?)"
-        )
-          .bind(player.user_id, rawName)
-          .run();
-      }
     } catch {
-      // Ignore cache write errors
+      // Ignore write error
     }
   }
 
@@ -249,26 +223,6 @@ export const systemHandlers: Record<string, CommandHandler> = {
   },
 
   "/top": async (ctx: BotContext) => {
-    // Cache the command sender's current first_name so they never show as "Player"
-    if (ctx.message?.from?.first_name) {
-      try {
-        const upd = await ctx.env.DB.prepare(
-          "UPDATE broadcast_users SET first_name = ? WHERE user_id = ?"
-        )
-          .bind(ctx.message.from.first_name, ctx.userId)
-          .run();
-        if ((upd.meta?.changes ?? 0) === 0) {
-          await ctx.env.DB.prepare(
-            "INSERT OR IGNORE INTO broadcast_users (user_id, first_name) VALUES (?, ?)"
-          )
-            .bind(ctx.userId, ctx.message.from.first_name)
-            .run();
-        }
-      } catch {
-        // Ignore if table schema differs
-      }
-    }
-
     const topPlayers = await DB_MANAGER.getTopPlayers(ctx.env.DB, 5);
     if (!topPlayers || topPlayers.length === 0) {
       await sendMessage(ctx.chatId, "🏆 <b>No players registered yet.</b>");
@@ -292,5 +246,6 @@ export const systemHandlers: Record<string, CommandHandler> = {
   "/leaderboard": async (ctx: BotContext) => {
     await systemHandlers["/top"](ctx);
   },
+
 
 };

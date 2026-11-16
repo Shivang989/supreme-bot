@@ -12,30 +12,43 @@ export const DB_MANAGER = {
   // ==========================================
   // 👤 USER OPERATIONS
   // ==========================================
-  async ensureUserExists(db: D1Database, userId: number): Promise<void> {
-    // 1. Auto-migrate: ensure the column exists on existing databases
+  async ensureUserExists(db: D1Database, userId: number, firstName?: string): Promise<void> {
+    // 1. Auto-migrate: ensure required columns exist on existing databases
     try {
       await db.prepare("ALTER TABLE users ADD COLUMN last_daily INTEGER DEFAULT 0").run();
     } catch {
       // Column already exists, safe to ignore
     }
 
-    // 2. Check and register user if not found
+    try {
+      await db.prepare("ALTER TABLE users ADD COLUMN first_name TEXT").run();
+    } catch {
+      // Column already exists, safe to ignore
+    }
+
+    const cleanName = firstName?.trim() || null;
+
+    // 2. Check and register user if not found, or sync updated first_name
     const existing = await db
-      .prepare("SELECT user_id FROM users WHERE user_id = ?")
+      .prepare("SELECT user_id, first_name FROM users WHERE user_id = ?")
       .bind(userId)
-      .first();
+      .first<{ user_id: number; first_name?: string | null }>();
 
     if (!existing) {
       await db
         .prepare(
-          "INSERT INTO users (user_id, balance, ammo, kills, is_alive, protected_until, last_daily) VALUES (?, ?, 0, 0, 1, 0, 0)"
+          "INSERT INTO users (user_id, first_name, balance, ammo, kills, is_alive, protected_until, last_daily) VALUES (?, ?, ?, 0, 0, 1, 0, 0)"
         )
-        .bind(userId, CONFIG.STARTING_BALANCE)
+        .bind(userId, cleanName, CONFIG.STARTING_BALANCE)
+        .run();
+    } else if (cleanName && existing.first_name !== cleanName) {
+      await db
+        .prepare("UPDATE users SET first_name = ? WHERE user_id = ?")
+        .bind(cleanName, userId)
         .run();
     }
   },
- 
+
   async getUser(db: D1Database, userId: number): Promise<UserData | null> {
     const user = await db
       .prepare("SELECT * FROM users WHERE user_id = ?")
@@ -82,7 +95,6 @@ export const DB_MANAGER = {
     return result.results || [];
   },
 
-
   // ==========================================
   // ⚙️ DM UI CONFIG & BUILDER STORAGE
   // ==========================================
@@ -127,7 +139,6 @@ export const DB_MANAGER = {
     await this.ensureSettingsTable(db);
     await db.prepare("DELETE FROM bot_settings WHERE key = ?").bind(key).run();
   },
-
 
   // ==========================================
   // 🎒 INVENTORY OPERATIONS
@@ -187,5 +198,3 @@ export const DB_MANAGER = {
     return result.results || [];
   },
 };
-
-// ​█▬█ █ ▀█▀ ︻︻╦̵̵͇̿╤── END
